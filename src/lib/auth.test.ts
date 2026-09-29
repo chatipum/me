@@ -4,8 +4,8 @@ import {
   createPrintToken,
   createSessionToken,
   PRINT_TTL_MS,
-  safeEqual,
   SESSION_TTL_MS,
+  safeEqual,
   verifyPrintToken,
   verifySessionToken,
 } from './auth';

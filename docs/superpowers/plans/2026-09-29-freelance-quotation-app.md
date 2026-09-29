@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- Lint/format ด้วย Biome (`bun run lint` = `biome check`) ไม่ใช้ ESLint
 - ผู้ใช้คนเดียว ล็อกอินด้วย `APP_PASSWORD` เท่านั้น ไม่มีระบบสมัครสมาชิก
 - UI และ PDF เป็นภาษาไทยทั้งหมด; ฟอนต์ Sarabun self-hosted ผ่าน `next/font/local`
 - จำนวนเงินทุกที่เป็น **สตางค์ (integer)**; อัตราเป็น **basis points** (700 = 7%); จำนวนสินค้าเป็น **hundredths** (150 = 1.5)
@@ -119,7 +120,8 @@ bun add -d drizzle-kit @electric-sql/pglite @types/bun @types/ws
   "dev": "next dev",
   "build": "next build",
   "start": "next start",
-  "lint": "eslint",
+  "lint": "biome check",
+  "format": "biome check --write",
   "test": "bun test",
   "typecheck": "tsc --noEmit",
   "db:generate": "drizzle-kit generate",
@@ -127,7 +129,7 @@ bun add -d drizzle-kit @electric-sql/pglite @types/bun @types/ws
   "pdf:smoke": "bun scripts/pdf-smoke.ts"
 }
 ```
-(คง `lint` ตามที่ scaffold สร้างมา ถ้า scaffold ใช้คำสั่งอื่น)
+(scaffold ใช้ ESLint ให้ลบ `eslint`/`eslint-config-next` และ `eslint.config.mjs` แล้วติดตั้ง Biome: `bun add -d -E @biomejs/biome` — คงชื่อ script `lint`)
 
 - [ ] **Step 4: เขียน failing test** `src/lib/env.test.ts`
 

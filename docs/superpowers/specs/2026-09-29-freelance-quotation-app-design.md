@@ -47,6 +47,7 @@
 | Framework | Next.js (App Router), TypeScript |
 | Package manager / test runner | Bun (`bun test`) |
 | Styling | Tailwind CSS |
+| Lint / format | Biome |
 | Database | Neon Postgres + Drizzle ORM (driver `neon-serverless` แบบ WebSocket เพื่อรองรับ transaction) |
 | Test DB | PGlite (Postgres in-memory ผ่าน Drizzle) |
 | Validation | Zod (schema เดียวใช้ทั้ง client/server) |

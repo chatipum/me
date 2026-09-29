@@ -49,21 +49,33 @@ describe('computeTotals', () => {
   ];
 
   test('no tax', () => {
-    expect(
-      computeTotals({ items, vatEnabled: false, withholdingEnabled: false, withholdingRateBp: 300 }),
-    ).toEqual({ subtotal: 1150000, vatAmount: 0, total: 1150000, withholdingAmount: 0, netPayable: 1150000 });
+    expect(computeTotals({ items, vatEnabled: false, withholdingEnabled: false, withholdingRateBp: 300 })).toEqual({
+      subtotal: 1150000,
+      vatAmount: 0,
+      total: 1150000,
+      withholdingAmount: 0,
+      netPayable: 1150000,
+    });
   });
 
   test('VAT only', () => {
-    expect(
-      computeTotals({ items, vatEnabled: true, withholdingEnabled: false, withholdingRateBp: 300 }),
-    ).toEqual({ subtotal: 1150000, vatAmount: 80500, total: 1230500, withholdingAmount: 0, netPayable: 1230500 });
+    expect(computeTotals({ items, vatEnabled: true, withholdingEnabled: false, withholdingRateBp: 300 })).toEqual({
+      subtotal: 1150000,
+      vatAmount: 80500,
+      total: 1230500,
+      withholdingAmount: 0,
+      netPayable: 1230500,
+    });
   });
 
   test('withholding is computed on pre-VAT subtotal', () => {
-    expect(
-      computeTotals({ items, vatEnabled: true, withholdingEnabled: true, withholdingRateBp: 300 }),
-    ).toEqual({ subtotal: 1150000, vatAmount: 80500, total: 1230500, withholdingAmount: 34500, netPayable: 1196000 });
+    expect(computeTotals({ items, vatEnabled: true, withholdingEnabled: true, withholdingRateBp: 300 })).toEqual({
+      subtotal: 1150000,
+      vatAmount: 80500,
+      total: 1230500,
+      withholdingAmount: 34500,
+      netPayable: 1196000,
+    });
   });
 
   test('withholding without VAT, custom rate', () => {

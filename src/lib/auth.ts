@@ -9,13 +9,9 @@ function toHex(bytes: Uint8Array): string {
 }
 
 async function hmacHex(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ]);
   return toHex(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(data))));
 }
 
