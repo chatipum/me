@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** เว็บส่วนตัวสำหรับออกใบเสนอราคา → ใบแจ้งหนี้ → ใบเสร็จ เป็น PDF ภาษาไทย เก็บลูกค้าและประวัติเอกสาร deploy บน Vercel
+**Goal:** เว็บส่วนตัวสำหรับออกใบเสนอราคา → ใบแจ้งหนี้ → ใบเสร็จ เป็น PDF ภาษาไทย เก็บลูกค้าและประวัติเอกสาร คิดราคารายการจากชั่วโมง × ค่าตัว และจับเวลาทำงานจริงเทียบกับที่ประเมิน deploy บน Vercel
 
 **Architecture:** Next.js 16 App Router แอปเดียว หน้าเว็บเป็น Server Components, การเขียนข้อมูลผ่าน Server Actions ที่เรียก service functions (`src/server/*`) ซึ่งรับ `db` เป็นพารามิเตอร์ เพื่อให้ทดสอบกับ PGlite ได้ Logic ที่ไม่ยุ่งกับ DB (เงิน, ตัวอักษรไทย, เลขที่, สถานะ, token) อยู่ใน `src/lib/*` เป็น pure function PDF สร้างโดย Puppeteer เปิดหน้า `/print/[id]` แล้วเก็บไฟล์ใน Vercel Blob แบบ private
 
@@ -16,6 +16,10 @@
 - UI และ PDF เป็นภาษาไทยทั้งหมด; ฟอนต์ Sarabun self-hosted ผ่าน `next/font/local`
 - จำนวนเงินทุกที่เป็น **สตางค์ (integer)**; อัตราเป็น **basis points** (700 = 7%); จำนวนสินค้าเป็น **hundredths** (150 = 1.5)
 - VAT คงที่ 7%; หัก ณ ที่จ่ายคิดจากยอดก่อน VAT; ปัดครึ่งขึ้นเป็นสตางค์
+- ชั่วโมงเก็บเป็น **hundredths** (1000 = 10 ชม.); รายการที่ `hoursHundredths > 0` ราคาต่อหน่วย = `hourlyUnitPrice(hours, rate)` คำนวณฝั่ง server เสมอ (ไม่ใช้ราคาจาก client); `hoursHundredths = 0` = รายการเหมาจ่าย ใช้ราคาที่กรอก
+- ค่าตัวของเอกสาร (`documents.hourlyRateSatang`): สร้างใหม่ / คัดลอกเป็นใบใหม่ = ค่าตัวปัจจุบันจาก settings; แก้ไข / แปลงเอกสาร = ค่าเดิมของเอกสาร
+- PDF ไม่มีคอลัมน์ชั่วโมง; รายการรายชั่วโมงต่อท้ายรายละเอียดด้วย ` (10 ชั่วโมง)`
+- ตัวจับเวลาเดินได้ทีละตัวทั้งระบบ; เวลาผูกกับใบเสนอราคาต้นทาง (`jobId`) เสมอ; เวลาแสดงและกรอกเป็นเวลาไทย (+07:00)
 - ยอดเงินคำนวณฝั่ง server ก่อนบันทึกเสมอ
 - เลขที่: `QT-YYYY-0001`, `INV-YYYY-0001`, `RC-YYYY-0001` ปี ค.ศ. จาก `issue_date`, ไม่นำเลขกลับมาใช้
 - วันที่เก็บเป็น `YYYY-MM-DD`; "วันนี้" คิดตามเขต `Asia/Bangkok`; แสดงผลเป็น พ.ศ.
@@ -29,8 +33,8 @@
 
 1. **ลบใบเสร็จ** — ใบแจ้งหนี้แม่ต้องกลับเป็น `unpaid` และแปลงเป็นใบเสร็จใหม่ได้ (ไม่ค้างเป็น `paid` แบบไม่มีใบเสร็จ) → test ใน Task 9
 2. **กดแปลงซ้ำ / ดับเบิลคลิก** — การแปลงครั้งที่สองต้องถูกปฏิเสธ ไม่เกิดเอกสารลูกสองใบ (มี unique `parent_id` เป็นด่านสุดท้าย) → test ใน Task 9
-3. **ข้ามปี** — เอกสารที่ `issue_date` เป็นปีใหม่เริ่มเลข `0001` ของปีนั้น และแต่ละประเภทรันแยกกัน → test ใน Task 8
-4. **"วันนี้" ช่วงหัวค่ำ** — 20:00 UTC ของ 29 ก.ย. คือ 30 ก.ย. ในไทย ค่า default วันที่ต้องเป็นวันไทย → test ใน Task 3
+3. **ขึ้นค่าตัวหลังส่งใบเสนอราคาแล้ว** — ใบเก่า (รวมตอนแก้ไขและตอนแปลงเป็นใบแจ้งหนี้) ต้องคงราคาเดิม; เฉพาะใบใหม่/คัดลอกที่ใช้ค่าตัวใหม่ → test ใน Task 8 และ Task 9
+4. **กดเริ่มจับเวลางานใหม่ขณะอีกงานยังเดินอยู่** — ตัวเก่าหยุดอัตโนมัติ ไม่มีสองตัวเดินพร้อมกัน (DB บังคับด้วย partial unique index) และเวลาของตัวเก่าไม่หาย → test ใน Task 15
 5. **แก้ข้อมูลลูกค้าหลังออกเอกสาร** — เอกสารเก่าต้องแสดงที่อยู่เดิม (snapshot) → test ใน Task 8
 
 ---
@@ -54,17 +58,21 @@ src/
       customers/page.tsx, customers/new/page.tsx, customers/[id]/page.tsx, customers/actions.ts
       documents/new/page.tsx, documents/[id]/page.tsx, documents/[id]/edit/page.tsx
       documents/actions.ts, documents/document-actions.tsx
+      documents/[id]/time-section.tsx  # ตัวจับเวลา + รายการเวลาของงาน
+      time/page.tsx, time/actions.ts   # หน้าสรุปเวลา + actions จับเวลา
   components/
     field.tsx                      # label + input + error
     customer-form.tsx              # ฟอร์มลูกค้า (client)
     document-form.tsx              # ฟอร์มเอกสาร (client)
     document-template.tsx          # template เอกสาร ใช้ทั้งพรีวิวและ print
+    document-table.tsx             # ตารางรายการเอกสาร
+    running-timer.tsx              # แถบตัวจับเวลาใน nav
   lib/
-    env.ts, money.ts, baht-text.ts, dates.ts, doc-number.ts, doc-status.ts, auth.ts, schemas.ts
+    env.ts, money.ts, baht-text.ts, dates.ts, doc-number.ts, doc-status.ts, auth.ts, schemas.ts, time.ts
   db/
     schema.ts, types.ts, client.ts
   server/
-    errors.ts, action-result.ts, settings.ts, customers.ts, documents.ts, document-flow.ts
+    errors.ts, action-result.ts, settings.ts, customers.ts, documents.ts, document-flow.ts, time.ts
   pdf/
     render.ts, storage.ts
   test/
@@ -195,6 +203,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `VAT_RATE_BP = 700`
   - `divRoundHalfUp(numerator: number, denominator: number): number` (non-negative integers)
   - `lineAmount(quantityHundredths: number, unitPriceSatang: number): number`
+  - `hourlyUnitPrice(hoursHundredths: number, hourlyRateSatang: number): number`
+  - `priceItem<T extends { hoursHundredths: number; unitPriceSatang: number }>(item: T, hourlyRateSatang: number): T` — ถ้า `hoursHundredths > 0` คืน item ที่ `unitPriceSatang` = `hourlyUnitPrice(...)` ไม่งั้นคืนตามเดิม
   - `type TotalsInput = { items: { quantityHundredths: number; unitPriceSatang: number }[]; vatEnabled: boolean; withholdingEnabled: boolean; withholdingRateBp: number }`
   - `type Totals = { subtotal: number; vatAmount: number; total: number; withholdingAmount: number; netPayable: number }`
   - `computeTotals(input: TotalsInput): Totals`
@@ -212,8 +222,10 @@ import {
   divRoundHalfUp,
   formatDecimal2,
   formatQuantity,
+  hourlyUnitPrice,
   lineAmount,
   parseDecimal2,
+  priceItem,
   toInputString,
 } from './money';
 
@@ -233,6 +245,18 @@ describe('lineAmount', () => {
   test('fractional quantity rounds to satang', () => {
     expect(lineAmount(50, 3333)).toBe(1667); // 0.5 × 33.33 = 16.665 → 16.67
     expect(lineAmount(150, 100001)).toBe(150002); // 1.5 × 1,000.01 = 1,500.015 → 1,500.02
+  });
+});
+
+describe('hourly pricing', () => {
+  test('hourlyUnitPrice = hours × rate, rounded half up to satang', () => {
+    expect(hourlyUnitPrice(1000, 50000)).toBe(500000); // 10 h × 500.00
+    expect(hourlyUnitPrice(25, 33333)).toBe(8333); // 0.25 h × 333.33 = 83.3325 → 83.33
+    expect(hourlyUnitPrice(1000, 0)).toBe(0);
+  });
+  test('priceItem uses hours when > 0, otherwise keeps the entered price', () => {
+    expect(priceItem({ hoursHundredths: 1000, unitPriceSatang: 1 }, 50000).unitPriceSatang).toBe(500000);
+    expect(priceItem({ hoursHundredths: 0, unitPriceSatang: 120000 }, 50000).unitPriceSatang).toBe(120000);
   });
 });
 
@@ -343,6 +367,18 @@ export function divRoundHalfUp(numerator: number, denominator: number): number {
 
 export function lineAmount(quantityHundredths: number, unitPriceSatang: number): number {
   return divRoundHalfUp(quantityHundredths * unitPriceSatang, 100);
+}
+
+export function hourlyUnitPrice(hoursHundredths: number, hourlyRateSatang: number): number {
+  return divRoundHalfUp(hoursHundredths * hourlyRateSatang, 100);
+}
+
+export function priceItem<T extends { hoursHundredths: number; unitPriceSatang: number }>(
+  item: T,
+  hourlyRateSatang: number,
+): T {
+  if (item.hoursHundredths <= 0) return item;
+  return { ...item, unitPriceSatang: hourlyUnitPrice(item.hoursHundredths, hourlyRateSatang) };
 }
 
 function applyRateBp(amount: number, rateBp: number): number {
@@ -926,7 +962,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `DOC_TYPES`, `DocStatus`, `PaymentMethod` จาก `@/lib/doc-status`
 - Produces:
-  - Tables: `settings`, `customers`, `documents`, `documentItems`, `counters`; enum `docTypeEnum`
+  - Tables: `settings`, `customers`, `documents`, `documentItems`, `counters`, `timeEntries`; enum `docTypeEnum`
+  - Types: `Settings`, `Customer`, `CustomerInsert`, `DocumentRow`, `DocumentItem`, `TimeEntry`
   - `type CustomerSnapshot = { name: string; taxId: string; branch: string; address: string; contactName: string }`
   - `type Db = PgDatabase<PgQueryResultHKT>` (จาก `@/db/types`)
   - `getDb(): Db` (production, Neon)
@@ -936,6 +973,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: เขียน `src/db/schema.ts`**
 
 ```ts
+import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
@@ -948,6 +986,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { DOC_TYPES, type DocStatus, type PaymentMethod } from '@/lib/doc-status';
 
@@ -980,6 +1019,7 @@ export const settings = pgTable('settings', {
   defaultQuoteValidityDays: integer('default_quote_validity_days').notNull().default(30),
   defaultInvoiceDueDays: integer('default_invoice_due_days').notNull().default(30),
   defaultNotes: text('default_notes').notNull().default(''),
+  hourlyRateSatang: integer('hourly_rate_satang').notNull().default(0),
 });
 
 export const customers = pgTable('customers', {
@@ -1021,6 +1061,8 @@ export const documents = pgTable('documents', {
   withholdingAmount: integer('withholding_amount').notNull(),
   netPayable: integer('net_payable').notNull(),
   notes: text('notes').notNull().default(''),
+  // snapshot of settings.hourlyRateSatang when the document was created
+  hourlyRateSatang: integer('hourly_rate_satang').notNull().default(0),
   pdfPathname: text('pdf_pathname'),
   pdfGeneratedAt: timestamp('pdf_generated_at', { withTimezone: true }),
   ...timestamps,
@@ -1033,6 +1075,8 @@ export const documentItems = pgTable('document_items', {
     .references(() => documents.id, { onDelete: 'cascade' }),
   position: integer('position').notNull(),
   description: text('description').notNull(),
+  // hours per unit × 100; 0 = fixed-price item
+  hoursHundredths: integer('hours_hundredths').notNull().default(0),
   quantityHundredths: integer('quantity_hundredths').notNull(),
   unit: text('unit').notNull().default(''),
   unitPriceSatang: integer('unit_price_satang').notNull(),
@@ -1049,11 +1093,27 @@ export const counters = pgTable(
   (t) => [primaryKey({ columns: [t.type, t.year] })],
 );
 
+export const timeEntries = pgTable(
+  'time_entries',
+  {
+    id: serial('id').primaryKey(),
+    jobId: integer('job_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    note: text('note').notNull().default(''),
+  },
+  // At most one running timer: every running row indexes the same value (true).
+  () => [uniqueIndex('time_entries_one_running').on(sql`(ended_at IS NULL)`).where(sql`ended_at IS NULL`)],
+);
+
 export type Settings = typeof settings.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type CustomerInsert = typeof customers.$inferInsert;
 export type DocumentRow = typeof documents.$inferSelect;
 export type DocumentItem = typeof documentItems.$inferSelect;
+export type TimeEntry = typeof timeEntries.$inferSelect;
 ```
 
 - [ ] **Step 2: เขียน `src/db/types.ts`**
@@ -1100,7 +1160,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Generate migration** — `bun run db:generate` Expected: สร้าง `drizzle/0000_*.sql` และ `drizzle/meta/*`
+- [ ] **Step 5: Generate migration** — `bun run db:generate` Expected: สร้าง `drizzle/0000_*.sql` และ `drizzle/meta/*`; เปิดไฟล์ SQL ตรวจว่ามี `CREATE UNIQUE INDEX "time_entries_one_running" ON "time_entries" ... ((ended_at IS NULL)) WHERE ended_at IS NULL`
 
 - [ ] **Step 6: เขียน `src/test/db.ts` และ `src/test/fixtures.ts`**
 
@@ -1152,8 +1212,8 @@ export function sampleInput(customerId: number, overrides: Partial<DocumentInput
     withholdingRateBp: 300,
     notes: '',
     items: [
-      { description: 'ออกแบบเว็บไซต์', quantityHundredths: 100, unit: 'งาน', unitPriceSatang: 1000000 },
-      { description: 'ดูแลระบบรายเดือน', quantityHundredths: 300, unit: 'เดือน', unitPriceSatang: 50000 },
+      { description: 'ออกแบบเว็บไซต์', hoursHundredths: 0, quantityHundredths: 100, unit: 'งาน', unitPriceSatang: 1000000 },
+      { description: 'ดูแลระบบรายเดือน', hoursHundredths: 0, quantityHundredths: 300, unit: 'เดือน', unitPriceSatang: 50000 },
     ],
     ...overrides,
   };
@@ -1252,7 +1312,7 @@ describe('documentInput', () => {
     withholdingEnabled: false,
     withholdingRateBp: 300,
     notes: '',
-    items: [{ description: 'งาน', quantityHundredths: 100, unit: '', unitPriceSatang: 1000 }],
+    items: [{ description: 'งาน', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 1000 }],
   };
   test('valid', () => {
     expect(documentInput.safeParse(base).success).toBe(true);
@@ -1269,6 +1329,9 @@ describe('documentInput', () => {
       documentInput.safeParse({ ...base, items: [{ ...base.items[0], unitPriceSatang: -1 }] }).success,
     ).toBe(false);
     expect(documentInput.safeParse({ ...base, withholdingRateBp: 10001 }).success).toBe(false);
+    expect(
+      documentInput.safeParse({ ...base, items: [{ ...base.items[0], hoursHundredths: -1 }] }).success,
+    ).toBe(false);
   });
 });
 ```
@@ -1361,11 +1424,13 @@ export const settingsInput = z.object({
   defaultQuoteValidityDays: z.number().int().min(0).max(365),
   defaultInvoiceDueDays: z.number().int().min(0).max(365),
   defaultNotes: z.string(),
+  hourlyRateSatang: z.number().int().min(0),
 });
 export type SettingsInput = z.infer<typeof settingsInput>;
 
 export const itemInput = z.object({
   description: trimmed.min(1, 'กรุณากรอกรายละเอียด'),
+  hoursHundredths: z.number().int().min(0, 'ชั่วโมงต้องไม่ติดลบ'),
   quantityHundredths: z.number().int().positive('จำนวนต้องมากกว่า 0'),
   unit: trimmed,
   unitPriceSatang: z.number().int().min(0, 'ราคาต้องไม่ติดลบ'),
@@ -1492,13 +1557,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `src/server/documents.ts`, `src/server/documents.test.ts`
 
 **Interfaces:**
-- Consumes: `computeTotals`, `lineAmount`, `formatDocNumber`, `DocType`, `DocStatus`, `DocumentInput`, `DomainError`, tables
+- Consumes: `computeTotals`, `lineAmount`, `priceItem`, `formatDocNumber`, `DocType`, `DocStatus`, `DocumentInput`, `DomainError`, `getSettings`, tables
 - Produces:
   - `type DocumentWithItems = DocumentRow & { items: DocumentItem[]; childId: number | null; parentNumber: string | null }`
   - `type DocumentListItem = { id: number; type: DocType; number: string; status: DocStatus; issueDate: string; customerName: string; netPayable: number }`
   - `type DocumentFilter = { type?: DocType; status?: DocStatus; q?: string; customerId?: number }`
   - `allocateNumber(db: Db, type: DocType, issueDate: string): Promise<string>`
-  - `insertDocument(db: Db, args: { type: DocType; status: DocStatus; parentId: number | null; input: DocumentInput; snapshot?: CustomerSnapshot }): Promise<number>` — ต้องเรียกภายใน transaction
+  - `insertDocument(db: Db, args: { type: DocType; status: DocStatus; parentId: number | null; input: DocumentInput; hourlyRateSatang: number; snapshot?: CustomerSnapshot }): Promise<number>` — ต้องเรียกภายใน transaction; ราคาต่อหน่วยของรายการรายชั่วโมงคำนวณจาก `hourlyRateSatang` ที่ส่งเข้ามา
+  - `createQuotation` ใช้ `settings.hourlyRateSatang`; `updateDocument` ใช้ `hourlyRateSatang` เดิมของเอกสาร
   - `createQuotation(db: Db, input: DocumentInput): Promise<number>`
   - `getDocument(db: Db, id: number): Promise<DocumentWithItems | null>`
   - `updateDocument(db: Db, id: number, input: DocumentInput): Promise<void>`
@@ -1516,6 +1582,7 @@ import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { sampleInput, seedCustomer } from '@/test/fixtures';
 import { updateCustomer } from './customers';
+import { getSettings, updateSettings } from './settings';
 import {
   allocateNumber,
   createQuotation,
@@ -1638,6 +1705,49 @@ describe('listDocuments', () => {
   });
 });
 
+describe('hourly items', () => {
+  const hourlyInput = (id: number) =>
+    sampleInput(id, {
+      vatEnabled: false,
+      withholdingEnabled: false,
+      items: [
+        // client-sent price 0 must be ignored for hourly items
+        { description: 'ทำเว็บขายของ', hoursHundredths: 1000, quantityHundredths: 100, unit: 'งาน', unitPriceSatang: 0 },
+        { description: 'ค่าโดเมน', hoursHundredths: 0, quantityHundredths: 100, unit: 'ปี', unitPriceSatang: 50000 },
+      ],
+    });
+
+  async function setRate(hourlyRateSatang: number) {
+    const s = await getSettings(db);
+    await updateSettings(db, { ...s, hourlyRateSatang });
+  }
+
+  test('hourly unit price comes from the settings rate and the rate is snapshotted', async () => {
+    await setRate(50000);
+    const id = await createQuotation(db, hourlyInput(customerId));
+    const doc = await getDocument(db, id);
+    expect(doc!.hourlyRateSatang).toBe(50000);
+    expect(doc!.items.map((i) => [i.hoursHundredths, i.unitPriceSatang, i.amount])).toEqual([
+      [1000, 500000, 500000],
+      [0, 50000, 50000],
+    ]);
+    expect(doc!.subtotal).toBe(550000);
+  });
+
+  test('raising the rate later keeps existing documents (even when edited); new ones use the new rate', async () => {
+    await setRate(50000);
+    const id = await createQuotation(db, hourlyInput(customerId));
+    await setRate(80000);
+    await updateDocument(db, id, hourlyInput(customerId));
+    const edited = await getDocument(db, id);
+    expect(edited!.hourlyRateSatang).toBe(50000);
+    expect(edited!.items[0].unitPriceSatang).toBe(500000);
+    const newer = await getDocument(db, await createQuotation(db, hourlyInput(customerId)));
+    expect(newer!.hourlyRateSatang).toBe(80000);
+    expect(newer!.items[0].unitPriceSatang).toBe(800000);
+  });
+});
+
 describe('markPdfGenerated', () => {
   test('stores pathname and timestamp', async () => {
     const id = await createQuotation(db, sampleInput(customerId));
@@ -1668,9 +1778,10 @@ import type { Db } from '@/db/types';
 import { formatDocNumber } from '@/lib/doc-number';
 import type { DocStatus, DocType } from '@/lib/doc-status';
 import { isLocked } from '@/lib/doc-status';
-import { computeTotals, lineAmount } from '@/lib/money';
+import { computeTotals, lineAmount, priceItem } from '@/lib/money';
 import type { DocumentInput } from '@/lib/schemas';
 import { DomainError } from './errors';
+import { getSettings } from './settings';
 
 export type DocumentWithItems = DocumentRow & {
   items: DocumentItem[];
@@ -1709,7 +1820,12 @@ async function snapshotCustomer(db: Db, customerId: number): Promise<CustomerSna
   return { name: c.name, taxId: c.taxId, branch: c.branch, address: c.address, contactName: c.contactName };
 }
 
-function documentValues(input: DocumentInput) {
+// Hourly items are always re-priced here; the client-sent price is ignored.
+function pricedItems(input: DocumentInput, hourlyRateSatang: number) {
+  return input.items.map((item) => priceItem(item, hourlyRateSatang));
+}
+
+function documentValues(input: DocumentInput, hourlyRateSatang: number) {
   return {
     customerId: input.customerId,
     issueDate: input.issueDate,
@@ -1721,16 +1837,18 @@ function documentValues(input: DocumentInput) {
     withholdingEnabled: input.withholdingEnabled,
     withholdingRateBp: input.withholdingRateBp,
     notes: input.notes,
-    ...computeTotals(input),
+    hourlyRateSatang,
+    ...computeTotals({ ...input, items: pricedItems(input, hourlyRateSatang) }),
   };
 }
 
-async function insertItems(db: Db, documentId: number, input: DocumentInput): Promise<void> {
+async function insertItems(db: Db, documentId: number, input: DocumentInput, hourlyRateSatang: number): Promise<void> {
   await db.insert(documentItems).values(
-    input.items.map((item, position) => ({
+    pricedItems(input, hourlyRateSatang).map((item, position) => ({
       documentId,
       position,
       description: item.description,
+      hoursHundredths: item.hoursHundredths,
       quantityHundredths: item.quantityHundredths,
       unit: item.unit,
       unitPriceSatang: item.unitPriceSatang,
@@ -1747,6 +1865,7 @@ export async function insertDocument(
     status: DocStatus;
     parentId: number | null;
     input: DocumentInput;
+    hourlyRateSatang: number;
     snapshot?: CustomerSnapshot;
   },
 ): Promise<number> {
@@ -1760,17 +1879,18 @@ export async function insertDocument(
       status: args.status,
       parentId: args.parentId,
       customerSnapshot,
-      ...documentValues(args.input),
+      ...documentValues(args.input, args.hourlyRateSatang),
     })
     .returning({ id: documents.id });
-  await insertItems(db, row.id, args.input);
+  await insertItems(db, row.id, args.input, args.hourlyRateSatang);
   return row.id;
 }
 
 export function createQuotation(db: Db, input: DocumentInput): Promise<number> {
-  return db.transaction((tx) =>
-    insertDocument(tx, { type: 'quotation', status: 'draft', parentId: null, input }),
-  );
+  return db.transaction(async (tx) => {
+    const { hourlyRateSatang } = await getSettings(tx);
+    return insertDocument(tx, { type: 'quotation', status: 'draft', parentId: null, input, hourlyRateSatang });
+  });
 }
 
 export async function getDocument(db: Db, id: number): Promise<DocumentWithItems | null> {
@@ -1797,14 +1917,14 @@ async function requireUnlocked(db: Db, id: number): Promise<DocumentWithItems> {
 
 export function updateDocument(db: Db, id: number, input: DocumentInput): Promise<void> {
   return db.transaction(async (tx) => {
-    await requireUnlocked(tx, id);
+    const doc = await requireUnlocked(tx, id);
     const customerSnapshot = await snapshotCustomer(tx, input.customerId);
     await tx
       .update(documents)
-      .set({ ...documentValues(input), customerSnapshot, updatedAt: new Date() })
+      .set({ ...documentValues(input, doc.hourlyRateSatang), customerSnapshot, updatedAt: new Date() })
       .where(eq(documents.id, id));
     await tx.delete(documentItems).where(eq(documentItems.documentId, id));
-    await insertItems(tx, id, input);
+    await insertItems(tx, id, input, doc.hourlyRateSatang);
   });
 }
 
@@ -1895,6 +2015,7 @@ import {
   setQuotationStatus,
 } from './document-flow';
 import { createQuotation, deleteDocument, getDocument, updateDocument } from './documents';
+import { getSettings, updateSettings } from './settings';
 
 const TODAY = '2026-10-05';
 let db: Db;
@@ -2012,6 +2133,29 @@ describe('duplicateAsQuotation', () => {
     expect(doc!.parentId).toBeNull();
     expect(doc!.items.map((i) => i.description)).toEqual(['ออกแบบเว็บไซต์', 'ดูแลระบบรายเดือน']);
   });
+
+  test('conversion keeps the quotation rate; duplicate uses the current rate', async () => {
+    const s = await getSettings(db);
+    await updateSettings(db, { ...s, hourlyRateSatang: 50000 });
+    const qt = await createQuotation(
+      db,
+      sampleInput(customerId, {
+        items: [{ description: 'ทำเว็บ', hoursHundredths: 1000, quantityHundredths: 100, unit: '', unitPriceSatang: 0 }],
+      }),
+    );
+    await setQuotationStatus(db, qt, 'sent');
+    await setQuotationStatus(db, qt, 'accepted');
+    await updateSettings(db, { ...s, hourlyRateSatang: 80000 });
+
+    const invoice = await getDocument(db, await convertToInvoice(db, qt, TODAY));
+    expect(invoice!.hourlyRateSatang).toBe(50000);
+    expect(invoice!.items[0].hoursHundredths).toBe(1000);
+    expect(invoice!.items[0].unitPriceSatang).toBe(500000);
+
+    const copy = await getDocument(db, await duplicateAsQuotation(db, qt, TODAY));
+    expect(copy!.hourlyRateSatang).toBe(80000);
+    expect(copy!.items[0].unitPriceSatang).toBe(800000);
+  });
 });
 ```
 
@@ -2044,6 +2188,7 @@ function inputFrom(doc: DocumentWithItems, overrides: Partial<DocumentInput>): D
     notes: doc.notes,
     items: doc.items.map((item) => ({
       description: item.description,
+      hoursHundredths: item.hoursHundredths,
       quantityHundredths: item.quantityHundredths,
       unit: item.unit,
       unitPriceSatang: item.unitPriceSatang,
@@ -2078,6 +2223,7 @@ export function convertToInvoice(db: Db, id: number, today: string): Promise<num
       type: 'invoice',
       status: 'unpaid',
       parentId: quotation.id,
+      hourlyRateSatang: quotation.hourlyRateSatang,
       snapshot: quotation.customerSnapshot,
       input: inputFrom(quotation, { issueDate: today, dueDate: addDays(today, settings.defaultInvoiceDueDays) }),
     });
@@ -2096,6 +2242,7 @@ export function convertToReceipt(
       type: 'receipt',
       status: 'issued',
       parentId: invoice.id,
+      hourlyRateSatang: invoice.hourlyRateSatang,
       snapshot: invoice.customerSnapshot,
       input: inputFrom(invoice, { issueDate: today, ...payment }),
     });
@@ -2113,6 +2260,7 @@ export function duplicateAsQuotation(db: Db, id: number, today: string): Promise
       type: 'quotation',
       status: 'draft',
       parentId: null,
+      hourlyRateSatang: settings.hourlyRateSatang,
       input: inputFrom(source, { issueDate: today, validUntil: addDays(today, settings.defaultQuoteValidityDays) }),
     });
   });
@@ -2449,6 +2597,7 @@ const TEXT_FIELDS: { key: TextKey; label: string; multiline?: boolean }[] = [
 export function SettingsForm({ initial }: { initial: Settings }) {
   const [values, setValues] = useState(initial);
   const [rate, setRate] = useState(toInputString(initial.defaultWithholdingRateBp));
+  const [hourlyRate, setHourlyRate] = useState(toInputString(initial.hourlyRateSatang));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -2456,13 +2605,17 @@ export function SettingsForm({ initial }: { initial: Settings }) {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const rateBp = parseDecimal2(rate);
-    if (rateBp === null) {
-      setErrors({ defaultWithholdingRateBp: 'ตัวเลขไม่ถูกต้อง' });
+    const hourlyRateSatang = parseDecimal2(hourlyRate);
+    if (rateBp === null || hourlyRateSatang === null) {
+      setErrors({
+        ...(rateBp === null && { defaultWithholdingRateBp: 'ตัวเลขไม่ถูกต้อง' }),
+        ...(hourlyRateSatang === null && { hourlyRateSatang: 'ตัวเลขไม่ถูกต้อง' }),
+      });
       return;
     }
     startTransition(async () => {
       const { id: _id, ...rest } = values;
-      const result = await updateSettingsAction({ ...rest, defaultWithholdingRateBp: rateBp });
+      const result = await updateSettingsAction({ ...rest, defaultWithholdingRateBp: rateBp, hourlyRateSatang });
       setErrors(result.ok ? {} : (result.fieldErrors ?? {}));
       setMessage(result.ok ? 'บันทึกแล้ว' : result.error);
     });
@@ -2488,7 +2641,15 @@ export function SettingsForm({ initial }: { initial: Settings }) {
           )}
         </Field>
       ))}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Field label="ค่าตัวต่อชั่วโมง (บาท)" error={errors.hourlyRateSatang}>
+          <input
+            className={inputClass}
+            inputMode="decimal"
+            value={hourlyRate}
+            onChange={(e) => setHourlyRate(e.target.value)}
+          />
+        </Field>
         <Field label="หัก ณ ที่จ่ายเริ่มต้น (%)" error={errors.defaultWithholdingRateBp}>
           <input className={inputClass} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} />
         </Field>
@@ -2818,7 +2979,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
 ```
 
 - [ ] **Step 9: ตรวจด้วยมือ** — ตั้ง `DATABASE_URL` ของ Neon (branch dev) ใน `.env.local`, รัน `bun run db:migrate` แล้ว `bun dev`
-  - `/settings` กรอกข้อมูลแล้วบันทึก → "บันทึกแล้ว"; รีเฟรชแล้วค่ายังอยู่; ใส่เลขผู้เสียภาษี 5 หลัก → เห็น error ใต้ช่อง
+  - `/settings` กรอกข้อมูล (รวมค่าตัวต่อชั่วโมง `500`) แล้วบันทึก → "บันทึกแล้ว"; รีเฟรชแล้วค่ายังอยู่; ใส่เลขผู้เสียภาษี 5 หลัก → เห็น error ใต้ช่อง
   - `/customers/new` สร้างลูกค้า → ถูกพาไปหน้าลูกค้า; แก้ที่อยู่แล้วบันทึก → ค่าอัปเดต
   - `/customers?q=` ค้นหาเจอ
 
@@ -2921,7 +3082,10 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
           {doc.items.map((item, index) => (
             <tr key={item.id} className="break-inside-avoid border-b border-slate-200 align-top">
               <td className="py-2">{index + 1}</td>
-              <td className="whitespace-pre-line py-2 pr-2">{item.description}</td>
+              <td className="whitespace-pre-line py-2 pr-2">
+                {item.description}
+                {item.hoursHundredths > 0 && ` (${formatQuantity(item.hoursHundredths)} ชั่วโมง)`}
+              </td>
               <td className="py-2 text-right tabular-nums">{formatQuantity(item.quantityHundredths)}</td>
               <td className="py-2 pl-2">{item.unit}</td>
               <td className="py-2 text-right tabular-nums">{formatDecimal2(item.unitPriceSatang)}</td>
@@ -3043,7 +3207,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: ทุก service ใน Task 7–9, `DocumentTemplate`, `DocumentTable`, `CustomerForm`, `EMPTY_CUSTOMER`, `quickCreateCustomerAction`, `todayIso`, `addDays`, money helpers, `allowedTransitions`, `nextConversion`, `isLocked`, labels
 - Produces:
   - Actions: `createQuotationAction(input)`, `updateDocumentAction(id, input)`, `setStatusAction(id, to)`, `convertToInvoiceAction(id)`, `convertToReceiptAction(id, payment)`, `duplicateAction(id)`, `deleteDocumentAction(id)`
-  - `type DocumentFormValues` และ `DocumentForm({ docType, customers, initial, onSubmit, submitLabel })`
+  - `type DocumentFormValues` และ `DocumentForm({ docType, customers, hourlyRateSatang, initial, onSubmit, submitLabel })`
   - `DocumentActions({ id, type, status, hasChild, hasPdf, pdfStale })`
 
 - [ ] **Step 1: เขียน `src/app/(app)/documents/actions.ts`**
@@ -3130,13 +3294,13 @@ export async function deleteDocumentAction(id: number) {
 import { useState, useTransition } from 'react';
 import { quickCreateCustomerAction } from '@/app/(app)/customers/actions';
 import { type DocType, PAYMENT_METHOD_LABEL, PAYMENT_METHODS, type PaymentMethod, TYPE_LABEL } from '@/lib/doc-status';
-import { computeTotals, formatDecimal2, parseDecimal2 } from '@/lib/money';
+import { computeTotals, divRoundHalfUp, formatDecimal2, formatQuantity, hourlyUnitPrice, parseDecimal2 } from '@/lib/money';
 import type { DocumentInput } from '@/lib/schemas';
 import type { ActionResult } from '@/server/action-result';
 import { CustomerForm, EMPTY_CUSTOMER } from './customer-form';
 import { buttonClass, Field, inputClass, secondaryButtonClass } from './field';
 
-type ItemRow = { key: number; description: string; quantity: string; unit: string; unitPrice: string };
+type ItemRow = { key: number; description: string; hours: string; quantity: string; unit: string; unitPrice: string };
 
 export type DocumentFormValues = {
   customerId: number | null;
@@ -3153,17 +3317,19 @@ export type DocumentFormValues = {
 };
 
 let nextKey = 1;
-const emptyItem = (): ItemRow => ({ key: nextKey++, description: '', quantity: '1', unit: '', unitPrice: '' });
+const emptyItem = (): ItemRow => ({ key: nextKey++, description: '', hours: '', quantity: '1', unit: '', unitPrice: '' });
 
 export function DocumentForm({
   docType,
   customers: initialCustomers,
+  hourlyRateSatang,
   initial,
   onSubmit,
   submitLabel,
 }: {
   docType: DocType;
   customers: { id: number; name: string }[];
+  hourlyRateSatang: number; // the document's rate: settings for new docs, snapshot when editing
   initial: DocumentFormValues;
   onSubmit: (input: DocumentInput) => Promise<ActionResult<unknown>>;
   submitLabel: string;
@@ -3178,13 +3344,24 @@ export function DocumentForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const parsedItems = items.map((row) => ({
-    description: row.description,
-    unit: row.unit,
-    quantityHundredths: parseDecimal2(row.quantity),
-    unitPriceSatang: parseDecimal2(row.unitPrice),
-  }));
+  const parsedItems = items.map((row) => {
+    const hoursHundredths = row.hours.trim() === '' ? 0 : parseDecimal2(row.hours);
+    return {
+      description: row.description,
+      unit: row.unit,
+      hoursHundredths,
+      quantityHundredths: parseDecimal2(row.quantity),
+      // Hourly items show the computed price; the server recomputes it the same way.
+      unitPriceSatang: hoursHundredths
+        ? hourlyUnitPrice(hoursHundredths, hourlyRateSatang)
+        : parseDecimal2(row.unitPrice),
+    };
+  });
   const rateBp = parseDecimal2(values.withholdingRate);
+  const estimatedHoursHundredths = parsedItems.reduce(
+    (sum, i) => sum + divRoundHalfUp((i.hoursHundredths ?? 0) * (i.quantityHundredths ?? 0), 100),
+    0,
+  );
 
   const totals = computeTotals({
     items: parsedItems.map((i) => ({
@@ -3211,6 +3388,7 @@ export function DocumentForm({
   function submit() {
     const localErrors: Record<string, string> = {};
     parsedItems.forEach((item, i) => {
+      if (item.hoursHundredths === null) localErrors[`items.${i}.hoursHundredths`] = 'ตัวเลขไม่ถูกต้อง';
       if (item.quantityHundredths === null) localErrors[`items.${i}.quantityHundredths`] = 'ตัวเลขไม่ถูกต้อง';
       if (item.unitPriceSatang === null) localErrors[`items.${i}.unitPriceSatang`] = 'ตัวเลขไม่ถูกต้อง';
     });
@@ -3234,6 +3412,7 @@ export function DocumentForm({
       items: parsedItems.map((i) => ({
         description: i.description,
         unit: i.unit,
+        hoursHundredths: i.hoursHundredths!,
         quantityHundredths: i.quantityHundredths!,
         unitPriceSatang: i.unitPriceSatang!,
       })),
@@ -3350,13 +3529,24 @@ export function DocumentForm({
         {errors.items && <p className="text-sm text-red-600">{errors.items}</p>}
         {items.map((row, index) => (
           <div key={row.key} className="grid gap-2 border-b border-slate-100 pb-3 sm:grid-cols-12">
-            <div className="sm:col-span-5">
+            <div className="sm:col-span-4">
               <Field label={`รายการที่ ${index + 1}`} error={errors[`items.${index}.description`]}>
                 <textarea
                   rows={2}
                   className={inputClass}
                   value={row.description}
                   onChange={(e) => updateItem(row.key, { description: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-1">
+              <Field label="ชั่วโมง" error={errors[`items.${index}.hoursHundredths`]}>
+                <input
+                  inputMode="decimal"
+                  placeholder="—"
+                  className={inputClass}
+                  value={row.hours}
+                  onChange={(e) => updateItem(row.key, { hours: e.target.value })}
                 />
               </Field>
             </div>
@@ -3377,12 +3567,20 @@ export function DocumentForm({
             </div>
             <div className="sm:col-span-2">
               <Field label="ราคาต่อหน่วย" error={errors[`items.${index}.unitPriceSatang`]}>
-                <input
-                  inputMode="decimal"
-                  className={inputClass}
-                  value={row.unitPrice}
-                  onChange={(e) => updateItem(row.key, { unitPrice: e.target.value })}
-                />
+                {parsedItems[index].hoursHundredths ? (
+                  <input
+                    disabled
+                    className={`${inputClass} bg-slate-100`}
+                    value={formatDecimal2(parsedItems[index].unitPriceSatang ?? 0)}
+                  />
+                ) : (
+                  <input
+                    inputMode="decimal"
+                    className={inputClass}
+                    value={row.unitPrice}
+                    onChange={(e) => updateItem(row.key, { unitPrice: e.target.value })}
+                  />
+                )}
               </Field>
             </div>
             <div className="flex items-end gap-1 sm:col-span-2">
@@ -3407,6 +3605,15 @@ export function DocumentForm({
         <button type="button" onClick={() => setItems([...items, emptyItem()])} className={secondaryButtonClass}>
           + เพิ่มรายการ
         </button>
+        {estimatedHoursHundredths > 0 && (
+          <p className="text-sm text-slate-600">
+            ชั่วโมงประเมินรวม {formatQuantity(estimatedHoursHundredths)} ชม. × ค่าตัว{' '}
+            {formatDecimal2(hourlyRateSatang)} บาท/ชม.
+          </p>
+        )}
+        {estimatedHoursHundredths > 0 && hourlyRateSatang === 0 && (
+          <p className="text-sm text-amber-700">ยังไม่ได้ตั้งค่าตัวต่อชั่วโมงในหน้าตั้งค่า รายการรายชั่วโมงจะมีราคา 0</p>
+        )}
       </section>
 
       <section className="grid gap-6 rounded-lg bg-white p-6 shadow sm:grid-cols-2">
@@ -3493,6 +3700,7 @@ export default async function NewDocumentPage({ searchParams }: { searchParams: 
       <h1 className="text-xl font-bold">สร้างใบเสนอราคา</h1>
       <DocumentForm
         docType="quotation"
+        hourlyRateSatang={settings.hourlyRateSatang}
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
         submitLabel="บันทึก"
         onSubmit={createQuotationAction}
@@ -3540,6 +3748,7 @@ export default async function EditDocumentPage({ params }: { params: Promise<{ i
       <h1 className="text-xl font-bold">แก้ไข {doc.number}</h1>
       <DocumentForm
         docType={doc.type}
+        hourlyRateSatang={doc.hourlyRateSatang}
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
         submitLabel="บันทึก"
         onSubmit={updateDocumentAction.bind(null, id)}
@@ -3556,6 +3765,7 @@ export default async function EditDocumentPage({ params }: { params: Promise<{ i
           notes: doc.notes,
           items: doc.items.map((item) => ({
             description: item.description,
+            hours: item.hoursHundredths ? toInputString(item.hoursHundredths) : '',
             quantity: toInputString(item.quantityHundredths),
             unit: item.unit,
             unitPrice: toInputString(item.unitPriceSatang),
@@ -3661,7 +3871,10 @@ export function DocumentActions({
         {!isLocked(hasChild) && (
           <button
             disabled={pending}
-            onClick={() => confirm('ลบเอกสารนี้?') && run(() => deleteDocumentAction(id))}
+            onClick={() =>
+              confirm(type === 'quotation' ? 'ลบเอกสารนี้? เวลาที่จับไว้ของงานนี้จะถูกลบด้วย' : 'ลบเอกสารนี้?') &&
+              run(() => deleteDocumentAction(id))
+            }
             className={`${secondaryButtonClass} text-red-600`}
           >
             ลบ
@@ -3820,6 +4033,8 @@ export default async function HomePage({
   8. ลบใบเสร็จ → INV กลับเป็น "ค้างชำระ"
   9. "คัดลอกเป็นใบเสนอราคาใหม่" → ได้ QT ใบใหม่สถานะร่าง
   10. หน้าแรก กรองประเภท/สถานะ และค้นหาชื่อลูกค้าได้
+  11. ค่าตัว 500 บาท: รายการ "ทำเว็บขายของ" ชม. `10` จำนวน `1` → ราคาต่อหน่วยล็อกเป็น 5,000.00 และเห็น "ชั่วโมงประเมินรวม 10 ชม."; รายการ "ค่าโดเมน" เว้นชั่วโมง กรอกราคาเองได้; พรีวิวแสดง "ทำเว็บขายของ (10 ชั่วโมง)" และไม่มีคอลัมน์ชั่วโมง
+  12. เปลี่ยนค่าตัวเป็น 800 แล้วแก้ใบเดิม → ราคายังคิดที่ 500; สร้างใบใหม่ → คิดที่ 800
 
 - [ ] **Step 9: รัน `bun run typecheck && bun run lint && bun test`** — Expected: ผ่าน
 
@@ -4037,7 +4252,1066 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 15: Deploy to Vercel and README
+### Task 15: Time tracking logic and service
+
+**Files:**
+- Create: `src/lib/time.ts`, `src/lib/time.test.ts`, `src/server/time.ts`, `src/server/time.test.ts`
+- Modify: `src/lib/schemas.ts` (เพิ่ม `timeEntryInput`)
+
+**Interfaces:**
+- Consumes: `divRoundHalfUp`, `timeEntries`, `documents`, `documentItems`, `TimeEntry`, `DomainError`, `Db`, `isoDate` pattern ใน `schemas.ts`
+- Produces (`lib/time.ts`):
+  - `entryMinutes(startedAt: Date, endedAt: Date | null, now?: Date): number` — นาทีเต็ม; `endedAt = null` นับถึง `now`
+  - `estimatedMinutes(items: { hoursHundredths: number; quantityHundredths: number }[]): number`
+  - `variancePercent(actualMinutes: number, estimatedMinutes: number): number | null` — `null` เมื่อ estimated = 0
+  - `formatDuration(minutes: number): string` — 750 → "12:30"
+  - `formatElapsed(ms: number): string` — 5025000 → "01:23:45"
+  - `bangkokDateTime(date: string, time: string): Date` — ("2026-09-29", "09:00") → 2026-09-29T02:00:00Z
+  - `toBangkokParts(value: Date): { date: string; time: string }`
+- Produces (`lib/schemas.ts`): `timeEntryInput` = `{ date, startTime, endTime, note }`, `type TimeEntryInput`
+- Produces (`server/time.ts`):
+  - `type RunningTimer = { entryId: number; jobId: number; jobNumber: string; startedAt: Date }`
+  - `type JobTimeSummary = { jobId: number; jobNumber: string; customerName: string; status: DocStatus; issueDate: string; estimatedMinutes: number; actualMinutes: number; variancePercent: number | null }`
+  - `resolveJobId(db: Db, documentId: number): Promise<number>`
+  - `startTimer(db: Db, documentId: number, now?: Date): Promise<void>`
+  - `stopTimer(db: Db, now?: Date): Promise<void>`
+  - `getRunningTimer(db: Db): Promise<RunningTimer | null>`
+  - `listTimeEntries(db: Db, jobId: number): Promise<TimeEntry[]>` (ใหม่สุดก่อน)
+  - `createTimeEntry(db: Db, documentId: number, input: TimeEntryInput): Promise<void>`
+  - `updateTimeEntry(db: Db, id: number, input: TimeEntryInput): Promise<void>`
+  - `deleteTimeEntry(db: Db, id: number): Promise<void>`
+  - `getJobTimeSummary(db: Db, documentId: number, now?: Date): Promise<JobTimeSummary>`
+  - `listJobSummaries(db: Db, filter?: { from?: string; to?: string }, now?: Date): Promise<JobTimeSummary[]>` — เฉพาะงานที่มีชั่วโมงประเมินหรือมีเวลาบันทึก, กรองด้วย `issueDate` ของใบเสนอราคา, ใหม่สุดก่อน
+
+- [ ] **Step 1: เขียน failing tests** `src/lib/time.test.ts`
+
+```ts
+import { describe, expect, test } from 'bun:test';
+import {
+  bangkokDateTime,
+  entryMinutes,
+  estimatedMinutes,
+  formatDuration,
+  formatElapsed,
+  toBangkokParts,
+  variancePercent,
+} from './time';
+
+describe('entryMinutes', () => {
+  test('whole minutes between start and end', () => {
+    expect(entryMinutes(new Date('2026-09-29T02:00:00Z'), new Date('2026-09-29T04:30:59Z'))).toBe(150);
+  });
+  test('running entry counts up to now', () => {
+    const now = new Date('2026-09-29T03:00:00Z');
+    expect(entryMinutes(new Date('2026-09-29T02:00:00Z'), null, now)).toBe(60);
+  });
+  test('never negative', () => {
+    expect(entryMinutes(new Date('2026-09-29T02:00:00Z'), new Date('2026-09-29T01:00:00Z'))).toBe(0);
+  });
+});
+
+describe('estimatedMinutes', () => {
+  test('sums hours × quantity of hourly items only', () => {
+    expect(
+      estimatedMinutes([
+        { hoursHundredths: 1000, quantityHundredths: 100 }, // 10 h
+        { hoursHundredths: 0, quantityHundredths: 100 }, // fixed price
+        { hoursHundredths: 150, quantityHundredths: 200 }, // 1.5 h × 2 = 3 h
+      ]),
+    ).toBe(780);
+  });
+});
+
+describe('variancePercent', () => {
+  test('over and under estimate', () => {
+    expect(variancePercent(750, 600)).toBe(25);
+    expect(variancePercent(450, 600)).toBe(-25);
+    expect(variancePercent(600, 600)).toBe(0);
+  });
+  test('no estimate → null', () => {
+    expect(variancePercent(100, 0)).toBeNull();
+  });
+});
+
+describe('formatting', () => {
+  test('formatDuration', () => {
+    expect(formatDuration(750)).toBe('12:30');
+    expect(formatDuration(5)).toBe('0:05');
+    expect(formatDuration(0)).toBe('0:00');
+  });
+  test('formatElapsed', () => {
+    expect(formatElapsed(5_025_000)).toBe('01:23:45');
+    expect(formatElapsed(-10)).toBe('00:00:00');
+  });
+});
+
+describe('Bangkok time conversion', () => {
+  test('bangkokDateTime', () => {
+    expect(bangkokDateTime('2026-09-29', '09:00').toISOString()).toBe('2026-09-29T02:00:00.000Z');
+  });
+  test('toBangkokParts crosses midnight', () => {
+    expect(toBangkokParts(new Date('2026-09-29T17:30:00Z'))).toEqual({ date: '2026-09-30', time: '00:30' });
+  });
+});
+```
+
+- [ ] **Step 2: รัน `bun test src/lib/time.test.ts`** — Expected: FAIL (module not found)
+
+- [ ] **Step 3: เขียน `src/lib/time.ts`**
+
+```ts
+import { divRoundHalfUp } from './money';
+
+export function entryMinutes(startedAt: Date, endedAt: Date | null, now: Date = new Date()): number {
+  const end = endedAt ?? now;
+  return Math.max(0, Math.floor((end.getTime() - startedAt.getTime()) / 60_000));
+}
+
+export function estimatedMinutes(items: { hoursHundredths: number; quantityHundredths: number }[]): number {
+  // (hours/100) × (quantity/100) × 60 minutes
+  return items.reduce(
+    (sum, item) => sum + divRoundHalfUp(item.hoursHundredths * item.quantityHundredths * 60, 10_000),
+    0,
+  );
+}
+
+export function variancePercent(actualMinutes: number, estimated: number): number | null {
+  if (estimated === 0) return null;
+  return Math.round(((actualMinutes - estimated) / estimated) * 100);
+}
+
+export function formatDuration(minutes: number): string {
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+export function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+
+export function bangkokDateTime(date: string, time: string): Date {
+  return new Date(`${date}T${time}:00+07:00`);
+}
+
+const bangkokFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Bangkok',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+export function toBangkokParts(value: Date): { date: string; time: string } {
+  const parts = Object.fromEntries(bangkokFormatter.formatToParts(value).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+```
+
+- [ ] **Step 4: รัน `bun test src/lib/time.test.ts`** — Expected: PASS
+
+- [ ] **Step 5: เพิ่ม `timeEntryInput` ท้าย `src/lib/schemas.ts`**
+
+```ts
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'รูปแบบเวลาไม่ถูกต้อง');
+
+export const timeEntryInput = z.object({
+  date: isoDate,
+  startTime: hhmm,
+  endTime: hhmm,
+  note: trimmed,
+});
+export type TimeEntryInput = z.infer<typeof timeEntryInput>;
+```
+
+- [ ] **Step 6: เขียน failing tests** `src/server/time.test.ts`
+
+```ts
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { isNull } from 'drizzle-orm';
+import { timeEntries } from '@/db/schema';
+import type { Db } from '@/db/types';
+import { createTestDb } from '@/test/db';
+import { sampleInput, seedCustomer } from '@/test/fixtures';
+import { convertToInvoice, convertToReceipt, setQuotationStatus } from './document-flow';
+import { createQuotation, deleteDocument } from './documents';
+import {
+  createTimeEntry,
+  deleteTimeEntry,
+  getJobTimeSummary,
+  getRunningTimer,
+  listJobSummaries,
+  listTimeEntries,
+  resolveJobId,
+  startTimer,
+  stopTimer,
+  updateTimeEntry,
+} from './time';
+
+const T0 = new Date('2026-09-29T02:00:00Z'); // 09:00 Bangkok
+const minutesLater = (m: number) => new Date(T0.getTime() + m * 60_000);
+let db: Db;
+let customerId: number;
+
+beforeEach(async () => {
+  db = await createTestDb();
+  customerId = await seedCustomer(db);
+});
+
+// 10 h estimate (hourly item) + one fixed-price item
+function hourlyQuotation(issueDate = '2026-09-29') {
+  return createQuotation(
+    db,
+    sampleInput(customerId, {
+      issueDate,
+      items: [
+        { description: 'ทำเว็บขายของ', hoursHundredths: 1000, quantityHundredths: 100, unit: '', unitPriceSatang: 0 },
+        { description: 'ค่าโดเมน', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 50000 },
+      ],
+    }),
+  );
+}
+
+async function fullChain() {
+  const qt = await hourlyQuotation();
+  await setQuotationStatus(db, qt, 'sent');
+  await setQuotationStatus(db, qt, 'accepted');
+  const inv = await convertToInvoice(db, qt, '2026-10-01');
+  const rc = await convertToReceipt(db, inv, { paidDate: '2026-10-02', paymentMethod: 'cash' }, '2026-10-02');
+  return { qt, inv, rc };
+}
+
+describe('resolveJobId', () => {
+  test('invoice and receipt resolve to the source quotation', async () => {
+    const { qt, inv, rc } = await fullChain();
+    expect(await resolveJobId(db, qt)).toBe(qt);
+    expect(await resolveJobId(db, inv)).toBe(qt);
+    expect(await resolveJobId(db, rc)).toBe(qt);
+  });
+  test('missing document', async () => {
+    await expect(resolveJobId(db, 999)).rejects.toThrow('ไม่พบเอกสาร');
+  });
+});
+
+describe('timer', () => {
+  test('start from an invoice records time on the quotation', async () => {
+    const { qt, inv } = await fullChain();
+    await startTimer(db, inv, T0);
+    const running = await getRunningTimer(db);
+    expect(running).toMatchObject({ jobId: qt, jobNumber: 'QT-2026-0001' });
+    expect(running!.startedAt.toISOString()).toBe(T0.toISOString());
+  });
+
+  test('starting a second job stops the first at the same instant', async () => {
+    const a = await hourlyQuotation();
+    const b = await hourlyQuotation();
+    await startTimer(db, a, T0);
+    await startTimer(db, b, minutesLater(90));
+    const [entryA] = await listTimeEntries(db, a);
+    expect(entryA.endedAt!.toISOString()).toBe(minutesLater(90).toISOString());
+    expect((await getRunningTimer(db))!.jobId).toBe(b);
+    expect(await db.select().from(timeEntries).where(isNull(timeEntries.endedAt))).toHaveLength(1);
+  });
+
+  test('database rejects two running entries', async () => {
+    const a = await hourlyQuotation();
+    await db.insert(timeEntries).values({ jobId: a, startedAt: T0 });
+    await expect(db.insert(timeEntries).values({ jobId: a, startedAt: minutesLater(1) })).rejects.toThrow();
+  });
+
+  test('stopTimer ends the running entry', async () => {
+    const a = await hourlyQuotation();
+    await startTimer(db, a, T0);
+    await stopTimer(db, minutesLater(30));
+    expect(await getRunningTimer(db)).toBeNull();
+    const [entry] = await listTimeEntries(db, a);
+    expect(entry.endedAt!.toISOString()).toBe(minutesLater(30).toISOString());
+  });
+});
+
+describe('manual entries', () => {
+  test('create via receipt, interpreted as Bangkok time', async () => {
+    const { qt, rc } = await fullChain();
+    await createTimeEntry(db, rc, { date: '2026-09-29', startTime: '09:00', endTime: '11:30', note: 'ออกแบบหน้าแรก' });
+    const [entry] = await listTimeEntries(db, qt);
+    expect(entry.startedAt.toISOString()).toBe('2026-09-29T02:00:00.000Z');
+    expect(entry.endedAt!.toISOString()).toBe('2026-09-29T04:30:00.000Z');
+    expect(entry.note).toBe('ออกแบบหน้าแรก');
+  });
+
+  test('end must be after start', async () => {
+    const qt = await hourlyQuotation();
+    const bad = { date: '2026-09-29', startTime: '10:00', endTime: '10:00', note: '' };
+    await expect(createTimeEntry(db, qt, bad)).rejects.toThrow('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
+    await expect(createTimeEntry(db, qt, { ...bad, endTime: '09:00' })).rejects.toThrow('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
+  });
+
+  test('update and delete', async () => {
+    const qt = await hourlyQuotation();
+    await createTimeEntry(db, qt, { date: '2026-09-29', startTime: '09:00', endTime: '10:00', note: '' });
+    const [entry] = await listTimeEntries(db, qt);
+    await updateTimeEntry(db, entry.id, { date: '2026-09-29', startTime: '09:00', endTime: '12:00', note: 'แก้' });
+    expect((await listTimeEntries(db, qt))[0].note).toBe('แก้');
+    await deleteTimeEntry(db, entry.id);
+    expect(await listTimeEntries(db, qt)).toHaveLength(0);
+  });
+
+  test('update of a missing entry', async () => {
+    await expect(
+      updateTimeEntry(db, 999, { date: '2026-09-29', startTime: '09:00', endTime: '10:00', note: '' }),
+    ).rejects.toThrow('ไม่พบรายการเวลา');
+  });
+
+  test('deleting the quotation deletes its time', async () => {
+    const qt = await hourlyQuotation();
+    await createTimeEntry(db, qt, { date: '2026-09-29', startTime: '09:00', endTime: '10:00', note: '' });
+    await deleteDocument(db, qt);
+    expect(await db.select().from(timeEntries)).toHaveLength(0);
+  });
+});
+
+describe('summaries', () => {
+  test('job summary: estimate vs actual, running timer counted up to now', async () => {
+    const qt = await hourlyQuotation();
+    await createTimeEntry(db, qt, { date: '2026-09-29', startTime: '09:00', endTime: '19:00', note: '' }); // 10 h
+    await startTimer(db, qt, T0);
+    const summary = await getJobTimeSummary(db, qt, minutesLater(150)); // + 2.5 h running
+    expect(summary).toMatchObject({
+      jobId: qt,
+      jobNumber: 'QT-2026-0001',
+      estimatedMinutes: 600,
+      actualMinutes: 750,
+      variancePercent: 25,
+    });
+  });
+
+  test('list: only jobs with estimate or time, filtered by quotation issue date', async () => {
+    const withEstimate = await hourlyQuotation('2026-09-29');
+    const fixedOnly = await createQuotation(db, sampleInput(customerId)); // no hours, no time
+    const fixedWithTime = await createQuotation(db, sampleInput(customerId, { issueDate: '2026-10-15' }));
+    await createTimeEntry(db, fixedWithTime, { date: '2026-10-15', startTime: '09:00', endTime: '10:00', note: '' });
+
+    const all = await listJobSummaries(db, {}, T0);
+    expect(all.map((r) => r.jobId)).toEqual([fixedWithTime, withEstimate]);
+    expect(all.find((r) => r.jobId === fixedWithTime)!.variancePercent).toBeNull();
+    expect(all.map((r) => r.jobId)).not.toContain(fixedOnly);
+
+    const october = await listJobSummaries(db, { from: '2026-10-01', to: '2026-10-31' }, T0);
+    expect(october.map((r) => r.jobId)).toEqual([fixedWithTime]);
+  });
+});
+```
+
+- [ ] **Step 7: รัน `bun test src/server/time.test.ts`** — Expected: FAIL
+
+- [ ] **Step 8: เขียน `src/server/time.ts`**
+
+```ts
+import { and, desc, eq, gte, inArray, isNull, lte, type SQL, sql } from 'drizzle-orm';
+import { documentItems, documents, type TimeEntry, timeEntries } from '@/db/schema';
+import type { Db } from '@/db/types';
+import type { DocStatus } from '@/lib/doc-status';
+import type { TimeEntryInput } from '@/lib/schemas';
+import { bangkokDateTime, entryMinutes, estimatedMinutes, variancePercent } from '@/lib/time';
+import { DomainError } from './errors';
+
+export type RunningTimer = { entryId: number; jobId: number; jobNumber: string; startedAt: Date };
+
+export type JobTimeSummary = {
+  jobId: number;
+  jobNumber: string;
+  customerName: string;
+  status: DocStatus;
+  issueDate: string;
+  estimatedMinutes: number;
+  actualMinutes: number;
+  variancePercent: number | null;
+};
+
+async function findDoc(db: Db, id: number) {
+  const [doc] = await db
+    .select({ id: documents.id, type: documents.type, parentId: documents.parentId })
+    .from(documents)
+    .where(eq(documents.id, id));
+  return doc;
+}
+
+export async function resolveJobId(db: Db, documentId: number): Promise<number> {
+  let doc = await findDoc(db, documentId);
+  if (!doc) throw new DomainError('ไม่พบเอกสาร');
+  // receipt → invoice → quotation
+  while (doc.type !== 'quotation') {
+    if (!doc.parentId) throw new DomainError('ไม่พบใบเสนอราคาต้นทาง');
+    const parent = await findDoc(db, doc.parentId);
+    if (!parent) throw new DomainError('ไม่พบใบเสนอราคาต้นทาง');
+    doc = parent;
+  }
+  return doc.id;
+}
+
+export function startTimer(db: Db, documentId: number, now: Date = new Date()): Promise<void> {
+  return db.transaction(async (tx) => {
+    const jobId = await resolveJobId(tx, documentId);
+    await tx.update(timeEntries).set({ endedAt: now }).where(isNull(timeEntries.endedAt));
+    await tx.insert(timeEntries).values({ jobId, startedAt: now });
+  });
+}
+
+export async function stopTimer(db: Db, now: Date = new Date()): Promise<void> {
+  await db.update(timeEntries).set({ endedAt: now }).where(isNull(timeEntries.endedAt));
+}
+
+export async function getRunningTimer(db: Db): Promise<RunningTimer | null> {
+  const [row] = await db
+    .select({
+      entryId: timeEntries.id,
+      jobId: timeEntries.jobId,
+      jobNumber: documents.number,
+      startedAt: timeEntries.startedAt,
+    })
+    .from(timeEntries)
+    .innerJoin(documents, eq(documents.id, timeEntries.jobId))
+    .where(isNull(timeEntries.endedAt));
+  return row ?? null;
+}
+
+export function listTimeEntries(db: Db, jobId: number): Promise<TimeEntry[]> {
+  return db
+    .select()
+    .from(timeEntries)
+    .where(eq(timeEntries.jobId, jobId))
+    .orderBy(desc(timeEntries.startedAt), desc(timeEntries.id));
+}
+
+function toRange(input: TimeEntryInput) {
+  const startedAt = bangkokDateTime(input.date, input.startTime);
+  const endedAt = bangkokDateTime(input.date, input.endTime);
+  if (endedAt <= startedAt) throw new DomainError('เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม');
+  return { startedAt, endedAt, note: input.note };
+}
+
+export async function createTimeEntry(db: Db, documentId: number, input: TimeEntryInput): Promise<void> {
+  const range = toRange(input);
+  const jobId = await resolveJobId(db, documentId);
+  await db.insert(timeEntries).values({ jobId, ...range });
+}
+
+export async function updateTimeEntry(db: Db, id: number, input: TimeEntryInput): Promise<void> {
+  const [row] = await db
+    .update(timeEntries)
+    .set(toRange(input))
+    .where(eq(timeEntries.id, id))
+    .returning({ id: timeEntries.id });
+  if (!row) throw new DomainError('ไม่พบรายการเวลา');
+}
+
+export async function deleteTimeEntry(db: Db, id: number): Promise<void> {
+  await db.delete(timeEntries).where(eq(timeEntries.id, id));
+}
+
+async function summarize(db: Db, conditions: SQL[], now: Date): Promise<JobTimeSummary[]> {
+  const jobs = await db
+    .select({
+      id: documents.id,
+      number: documents.number,
+      status: documents.status,
+      issueDate: documents.issueDate,
+      customerName: sql<string>`${documents.customerSnapshot}->>'name'`,
+    })
+    .from(documents)
+    .where(and(eq(documents.type, 'quotation'), ...conditions))
+    .orderBy(desc(documents.id));
+  if (jobs.length === 0) return [];
+  const ids = jobs.map((job) => job.id);
+  const items = await db
+    .select({
+      documentId: documentItems.documentId,
+      hoursHundredths: documentItems.hoursHundredths,
+      quantityHundredths: documentItems.quantityHundredths,
+    })
+    .from(documentItems)
+    .where(inArray(documentItems.documentId, ids));
+  const entries = await db
+    .select({ jobId: timeEntries.jobId, startedAt: timeEntries.startedAt, endedAt: timeEntries.endedAt })
+    .from(timeEntries)
+    .where(inArray(timeEntries.jobId, ids));
+
+  return jobs.map((job) => {
+    const estimated = estimatedMinutes(items.filter((item) => item.documentId === job.id));
+    const actual = entries
+      .filter((entry) => entry.jobId === job.id)
+      .reduce((sum, entry) => sum + entryMinutes(entry.startedAt, entry.endedAt, now), 0);
+    return {
+      jobId: job.id,
+      jobNumber: job.number,
+      customerName: job.customerName,
+      status: job.status,
+      issueDate: job.issueDate,
+      estimatedMinutes: estimated,
+      actualMinutes: actual,
+      variancePercent: variancePercent(actual, estimated),
+    };
+  });
+}
+
+export async function getJobTimeSummary(db: Db, documentId: number, now: Date = new Date()): Promise<JobTimeSummary> {
+  const jobId = await resolveJobId(db, documentId);
+  const [summary] = await summarize(db, [eq(documents.id, jobId)], now);
+  return summary;
+}
+
+export async function listJobSummaries(
+  db: Db,
+  filter: { from?: string; to?: string } = {},
+  now: Date = new Date(),
+): Promise<JobTimeSummary[]> {
+  const conditions: SQL[] = [];
+  if (filter.from) conditions.push(gte(documents.issueDate, filter.from));
+  if (filter.to) conditions.push(lte(documents.issueDate, filter.to));
+  const rows = await summarize(db, conditions, now);
+  return rows.filter((row) => row.estimatedMinutes > 0 || row.actualMinutes > 0);
+}
+```
+
+- [ ] **Step 9: รัน `bun test src/server/time.test.ts`** — Expected: PASS
+
+ถ้า test `database rejects two running entries` ไม่ throw แปลว่า migration ไม่มี partial unique index — กลับไปตรวจ `drizzle/0000_*.sql` (Task 6 Step 5)
+
+- [ ] **Step 10: รัน `bun test && bun run typecheck`** — Expected: ผ่านทั้งหมด
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add src/lib/time.* src/lib/schemas.ts src/server/time.*
+git commit -m "feat: add time tracking logic and service
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 16: Time tracking UI
+
+**Files:**
+- Create: `src/app/(app)/time/actions.ts`, `src/app/(app)/time/page.tsx`, `src/components/running-timer.tsx`, `src/app/(app)/documents/[id]/time-section.tsx`
+- Modify: `src/app/(app)/layout.tsx` (แทนทั้งไฟล์), `src/app/(app)/documents/[id]/page.tsx` (แทนทั้งไฟล์)
+
+**Interfaces:**
+- Consumes: ทุกอย่างจาก `server/time.ts` และ `lib/time.ts` (Task 15), `timeEntryInput`, `runAction`, `ActionResult`, `getDb`, `todayIso`, `formatThaiDate`, `STATUS_LABEL`, `Field`, `inputClass`, `buttonClass`, `secondaryButtonClass`, `DocumentActions`, `DocumentTemplate`
+- Produces:
+  - Actions: `startTimerAction(documentId: number)`, `stopTimerAction()`, `createTimeEntryAction(documentId: number, input: TimeEntryInput)`, `updateTimeEntryAction(id: number, input: TimeEntryInput)`, `deleteTimeEntryAction(id: number)` — ทั้งหมดคืน `ActionResult<void>`
+  - `RunningTimer({ jobId, jobNumber, startedAt }: { jobId: number; jobNumber: string; startedAt: string })`
+  - `TimeSection({ documentId, summary, entries, runningHere })`
+
+- [ ] **Step 1: เขียน `src/app/(app)/time/actions.ts`**
+
+```ts
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { getDb } from '@/db/client';
+import { type TimeEntryInput, timeEntryInput } from '@/lib/schemas';
+import { type ActionResult, runAction } from '@/server/action-result';
+import { createTimeEntry, deleteTimeEntry, startTimer, stopTimer, updateTimeEntry } from '@/server/time';
+
+async function run(fn: () => Promise<void>): Promise<ActionResult<void>> {
+  const result = await runAction(fn);
+  if (result.ok) revalidatePath('/', 'layout');
+  return result;
+}
+
+export async function startTimerAction(documentId: number) {
+  return run(() => startTimer(getDb(), documentId));
+}
+
+export async function stopTimerAction() {
+  return run(() => stopTimer(getDb()));
+}
+
+export async function createTimeEntryAction(documentId: number, input: TimeEntryInput) {
+  return run(() => createTimeEntry(getDb(), documentId, timeEntryInput.parse(input)));
+}
+
+export async function updateTimeEntryAction(id: number, input: TimeEntryInput) {
+  return run(() => updateTimeEntry(getDb(), id, timeEntryInput.parse(input)));
+}
+
+export async function deleteTimeEntryAction(id: number) {
+  return run(() => deleteTimeEntry(getDb(), id));
+}
+```
+
+- [ ] **Step 2: เขียน `src/components/running-timer.tsx`**
+
+```tsx
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useState, useTransition } from 'react';
+import { stopTimerAction } from '@/app/(app)/time/actions';
+import { formatElapsed } from '@/lib/time';
+
+export function RunningTimer({ jobId, jobNumber, startedAt }: { jobId: number; jobNumber: string; startedAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-sm">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+      <Link href={`/documents/${jobId}`} className="font-bold hover:underline">
+        {jobNumber}
+      </Link>
+      <span className="tabular-nums" suppressHydrationWarning>
+        {formatElapsed(now - new Date(startedAt).getTime())}
+      </span>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => startTransition(async () => void (await stopTimerAction()))}
+        className="rounded bg-red-600 px-2 text-white disabled:opacity-50"
+      >
+        หยุด
+      </button>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: แทนที่ `src/app/(app)/layout.tsx`** (เพิ่มเมนู "เวลา" และแถบตัวจับเวลา)
+
+```tsx
+import Link from 'next/link';
+import { logoutAction } from '@/app/login/actions';
+import { RunningTimer } from '@/components/running-timer';
+import { getDb } from '@/db/client';
+import { getRunningTimer } from '@/server/time';
+
+const NAV = [
+  { href: '/', label: 'เอกสาร' },
+  { href: '/customers', label: 'ลูกค้า' },
+  { href: '/time', label: 'เวลา' },
+  { href: '/settings', label: 'ตั้งค่า' },
+];
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const timer = await getRunningTimer(getDb());
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-slate-200 bg-white">
+        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-6 px-4 py-3">
+          {NAV.map((item) => (
+            <Link key={item.href} href={item.href} className="text-sm font-bold hover:underline">
+              {item.label}
+            </Link>
+          ))}
+          <div className="ml-auto flex items-center gap-4">
+            {timer && (
+              <RunningTimer
+                jobId={timer.jobId}
+                jobNumber={timer.jobNumber}
+                startedAt={timer.startedAt.toISOString()}
+              />
+            )}
+            <form action={logoutAction}>
+              <button type="submit" className="text-sm text-slate-500 hover:underline">
+                ออกจากระบบ
+              </button>
+            </form>
+          </div>
+        </nav>
+      </header>
+      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: เขียน `src/app/(app)/documents/[id]/time-section.tsx`**
+
+```tsx
+'use client';
+
+import { useState, useTransition } from 'react';
+import {
+  createTimeEntryAction,
+  deleteTimeEntryAction,
+  startTimerAction,
+  updateTimeEntryAction,
+} from '@/app/(app)/time/actions';
+import { buttonClass, inputClass, secondaryButtonClass } from '@/components/field';
+import { todayIso } from '@/lib/dates';
+import type { TimeEntryInput } from '@/lib/schemas';
+import { entryMinutes, formatDuration, toBangkokParts } from '@/lib/time';
+import type { ActionResult } from '@/server/action-result';
+
+type EntryView = { id: number; startedAt: string; endedAt: string | null; note: string };
+type Summary = { jobNumber: string; estimatedMinutes: number; actualMinutes: number; variancePercent: number | null };
+
+function EntryForm({
+  initial,
+  submitLabel,
+  onSubmit,
+  onCancel,
+}: {
+  initial: TimeEntryInput;
+  submitLabel: string;
+  onSubmit: (input: TimeEntryInput) => Promise<ActionResult<void>>;
+  onCancel?: () => void;
+}) {
+  const [values, setValues] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    startTransition(async () => {
+      const result = await onSubmit(values);
+      if (!result.ok) setError(result.error);
+      else if (!onCancel) setValues({ ...initial, note: '' });
+      else onCancel();
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+      <input
+        type="date"
+        required
+        className={`${inputClass} w-40`}
+        value={values.date}
+        onChange={(e) => setValues({ ...values, date: e.target.value })}
+      />
+      <input
+        type="time"
+        required
+        className={`${inputClass} w-28`}
+        value={values.startTime}
+        onChange={(e) => setValues({ ...values, startTime: e.target.value })}
+      />
+      <span className="pb-2">–</span>
+      <input
+        type="time"
+        required
+        className={`${inputClass} w-28`}
+        value={values.endTime}
+        onChange={(e) => setValues({ ...values, endTime: e.target.value })}
+      />
+      <input
+        placeholder="โน้ต"
+        className={`${inputClass} w-56`}
+        value={values.note}
+        onChange={(e) => setValues({ ...values, note: e.target.value })}
+      />
+      <button type="submit" disabled={pending} className={secondaryButtonClass}>
+        {submitLabel}
+      </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className={secondaryButtonClass}>
+          ยกเลิก
+        </button>
+      )}
+      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+    </form>
+  );
+}
+
+function toFormValues(entry: EntryView): TimeEntryInput {
+  const start = toBangkokParts(new Date(entry.startedAt));
+  const end = entry.endedAt ? toBangkokParts(new Date(entry.endedAt)) : start;
+  return { date: start.date, startTime: start.time, endTime: end.time, note: entry.note };
+}
+
+export function TimeSection({
+  documentId,
+  summary,
+  entries,
+  runningHere,
+}: {
+  documentId: number;
+  summary: Summary;
+  entries: EntryView[];
+  runningHere: boolean;
+}) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const variance = summary.variancePercent;
+
+  function run(action: () => Promise<ActionResult<void>>) {
+    setError(null);
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) setError(result.error);
+    });
+  }
+
+  return (
+    <section className="space-y-4 rounded-lg bg-white p-4 shadow print:hidden">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-bold">เวลาทำงาน · {summary.jobNumber}</h2>
+        <span className="text-sm tabular-nums">
+          ประเมิน {formatDuration(summary.estimatedMinutes)} · จริง {formatDuration(summary.actualMinutes)}
+          {variance !== null && (
+            <span className={variance > 0 ? 'text-red-600' : 'text-emerald-700'}>
+              {' '}
+              · {variance > 0 ? `เกิน ${variance}%` : variance < 0 ? `ต่ำกว่า ${-variance}%` : 'ตรงประเมิน'}
+            </span>
+          )}
+        </span>
+        <div className="ml-auto">
+          {runningHere ? (
+            <span className="text-sm text-red-600">กำลังจับเวลางานนี้ (หยุดได้จากแถบด้านบน)</span>
+          ) : (
+            <button disabled={pending} onClick={() => run(() => startTimerAction(documentId))} className={buttonClass}>
+              ▶ เริ่มจับเวลา
+            </button>
+          )}
+        </div>
+      </div>
+
+      <EntryForm
+        initial={{ date: todayIso(), startTime: '09:00', endTime: '10:00', note: '' }}
+        submitLabel="+ เพิ่มเวลา"
+        onSubmit={(input) => createTimeEntryAction(documentId, input)}
+      />
+
+      <ul className="divide-y divide-slate-100 text-sm">
+        {entries.map((entry) => {
+          const start = toBangkokParts(new Date(entry.startedAt));
+          const end = entry.endedAt ? toBangkokParts(new Date(entry.endedAt)) : null;
+          if (editingId === entry.id) {
+            return (
+              <li key={entry.id} className="py-2">
+                <EntryForm
+                  initial={toFormValues(entry)}
+                  submitLabel="บันทึก"
+                  onSubmit={(input) => updateTimeEntryAction(entry.id, input)}
+                  onCancel={() => setEditingId(null)}
+                />
+              </li>
+            );
+          }
+          return (
+            <li key={entry.id} className="flex flex-wrap items-center gap-3 py-2">
+              <span className="w-24">{start.date}</span>
+              <span className="w-28 tabular-nums">
+                {start.time} – {end ? end.time : 'กำลังเดิน'}
+              </span>
+              <span className="w-14 tabular-nums">
+                {end ? formatDuration(entryMinutes(new Date(entry.startedAt), new Date(entry.endedAt!))) : ''}
+              </span>
+              <span className="flex-1 text-slate-600">{entry.note}</span>
+              {end && (
+                <button onClick={() => setEditingId(entry.id)} className="text-slate-500 hover:underline">
+                  แก้
+                </button>
+              )}
+              <button
+                disabled={pending}
+                onClick={() => confirm('ลบรายการเวลานี้?') && run(() => deleteTimeEntryAction(entry.id))}
+                className="text-red-600 hover:underline"
+              >
+                ลบ
+              </button>
+            </li>
+          );
+        })}
+        {entries.length === 0 && <li className="py-2 text-slate-500">ยังไม่มีเวลาที่บันทึก</li>}
+      </ul>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </section>
+  );
+}
+```
+
+- [ ] **Step 5: แทนที่ `src/app/(app)/documents/[id]/page.tsx`**
+
+```tsx
+import { notFound } from 'next/navigation';
+import { DocumentTemplate } from '@/components/document-template';
+import { getDb } from '@/db/client';
+import { getDocument } from '@/server/documents';
+import { getSettings } from '@/server/settings';
+import { getJobTimeSummary, getRunningTimer, listTimeEntries } from '@/server/time';
+import { DocumentActions } from '../document-actions';
+import { TimeSection } from './time-section';
+
+export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  const id = Number((await params).id);
+  const db = getDb();
+  const doc = Number.isInteger(id) ? await getDocument(db, id) : null;
+  if (!doc) notFound();
+  const [settings, summary, timer] = await Promise.all([
+    getSettings(db),
+    getJobTimeSummary(db, doc.id),
+    getRunningTimer(db),
+  ]);
+  const entries = await listTimeEntries(db, summary.jobId);
+  const pdfStale = doc.pdfGeneratedAt !== null && doc.updatedAt > doc.pdfGeneratedAt;
+
+  return (
+    <div className="space-y-4">
+      <DocumentActions
+        id={doc.id}
+        type={doc.type}
+        status={doc.status}
+        hasChild={doc.childId !== null}
+        hasPdf={doc.pdfPathname !== null}
+        pdfStale={pdfStale}
+      />
+      <TimeSection
+        documentId={doc.id}
+        summary={summary}
+        runningHere={timer?.jobId === summary.jobId}
+        entries={entries.map((e) => ({
+          id: e.id,
+          startedAt: e.startedAt.toISOString(),
+          endedAt: e.endedAt?.toISOString() ?? null,
+          note: e.note,
+        }))}
+      />
+      <div className="overflow-x-auto rounded-lg bg-white p-[15mm] shadow">
+        <DocumentTemplate doc={doc} settings={settings} />
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: เขียน `src/app/(app)/time/page.tsx`**
+
+```tsx
+import Link from 'next/link';
+import { inputClass, secondaryButtonClass } from '@/components/field';
+import { getDb } from '@/db/client';
+import { formatThaiDate } from '@/lib/dates';
+import { STATUS_LABEL } from '@/lib/doc-status';
+import { formatDuration, variancePercent } from '@/lib/time';
+import { listJobSummaries } from '@/server/time';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function VarianceCell({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-slate-400">—</span>;
+  return <span className={value > 0 ? 'font-bold text-red-600' : 'text-emerald-700'}>{value > 0 ? `+${value}` : value}%</span>;
+}
+
+export default async function TimePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const params = await searchParams;
+  const from = params.from && ISO_DATE.test(params.from) ? params.from : undefined;
+  const to = params.to && ISO_DATE.test(params.to) ? params.to : undefined;
+  const rows = await listJobSummaries(getDb(), { from, to });
+  const totalEstimated = rows.reduce((sum, r) => sum + r.estimatedMinutes, 0);
+  const totalActual = rows.reduce((sum, r) => sum + r.actualMinutes, 0);
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-xl font-bold">เวลาทำงาน</h1>
+      <form className="flex flex-wrap items-end gap-2">
+        <label className="text-sm">
+          วันที่ออกใบเสนอราคา ตั้งแต่
+          <input type="date" name="from" defaultValue={from} className={`${inputClass} w-44`} />
+        </label>
+        <label className="text-sm">
+          ถึง
+          <input type="date" name="to" defaultValue={to} className={`${inputClass} w-44`} />
+        </label>
+        <button type="submit" className={secondaryButtonClass}>
+          กรอง
+        </button>
+      </form>
+      <div className="overflow-x-auto rounded-lg bg-white shadow">
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-200 text-left text-slate-500">
+            <tr>
+              <th className="px-4 py-2">เลขที่</th>
+              <th className="px-4 py-2">ลูกค้า</th>
+              <th className="px-4 py-2">วันที่</th>
+              <th className="px-4 py-2">สถานะ</th>
+              <th className="px-4 py-2 text-right">ประเมิน</th>
+              <th className="px-4 py-2 text-right">จริง</th>
+              <th className="px-4 py-2 text-right">ส่วนต่าง</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 tabular-nums">
+            {rows.map((row) => (
+              <tr key={row.jobId} className="hover:bg-slate-50">
+                <td className="px-4 py-2 font-bold">
+                  <Link href={`/documents/${row.jobId}`} className="hover:underline">
+                    {row.jobNumber}
+                  </Link>
+                </td>
+                <td className="px-4 py-2">{row.customerName}</td>
+                <td className="px-4 py-2">{formatThaiDate(row.issueDate)}</td>
+                <td className="px-4 py-2">{STATUS_LABEL[row.status]}</td>
+                <td className="px-4 py-2 text-right">{formatDuration(row.estimatedMinutes)}</td>
+                <td className="px-4 py-2 text-right">{formatDuration(row.actualMinutes)}</td>
+                <td className="px-4 py-2 text-right">
+                  <VarianceCell value={row.variancePercent} />
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
+                  ยังไม่มีงานที่มีชั่วโมงประเมินหรือเวลาที่บันทึก
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t border-slate-300 font-bold tabular-nums">
+              <tr>
+                <td colSpan={4} className="px-4 py-2">
+                  รวม {rows.length} งาน
+                </td>
+                <td className="px-4 py-2 text-right">{formatDuration(totalEstimated)}</td>
+                <td className="px-4 py-2 text-right">{formatDuration(totalActual)}</td>
+                <td className="px-4 py-2 text-right">
+                  <VarianceCell value={variancePercent(totalActual, totalEstimated)} />
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 7: ตรวจด้วยมือ** — `bun dev`
+  1. เปิดใบเสนอราคาที่มีรายการ 10 ชม. → ส่วน "เวลาทำงาน" แสดง "ประเมิน 10:00 · จริง 0:00"
+  2. กด "▶ เริ่มจับเวลา" → แถบบน nav แสดง `QT-… 00:00:0x` นับทุกวินาที; ข้อความในหน้าเปลี่ยนเป็น "กำลังจับเวลางานนี้"
+  3. ปิดแท็บ เปิดใหม่ (หรือเปิดจากอีกเบราว์เซอร์) → ตัวจับเวลายังเดินต่อจากเวลาเดิม
+  4. ไปใบเสนอราคาอื่นกด "เริ่มจับเวลา" → แถบบนเปลี่ยนเป็นงานใหม่; งานแรกมีรายการเวลาที่จบแล้ว
+  5. กด "หยุด" ในแถบบน → แถบหาย
+  6. เพิ่มเวลาเอง 09:00–19:00 → "จริง" เพิ่ม 10:00 และส่วนต่างเปลี่ยน; ใส่ 10:00–09:00 → เห็น "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม"
+  7. แก้และลบรายการเวลาได้
+  8. เปิดใบแจ้งหนี้ของงานเดียวกัน → เห็นเวลาชุดเดียวกัน (หัวข้อเป็นเลข QT); เริ่มจับเวลาจากใบแจ้งหนี้ → แถบบนแสดงเลข QT
+  9. `/time` → เห็นงาน, งานที่เกินประเมินเป็นสีแดง, แถวรวมถูกต้อง, กรองช่วงวันที่ได้
+
+- [ ] **Step 8: รัน `bun run typecheck && bun run lint && bun test`** — Expected: ผ่าน
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add -A
+git commit -m "feat: add timer bar, job time section and time summary page
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 17: Deploy to Vercel and README
 
 **Files:**
 - Modify: `README.md`
@@ -4078,7 +5352,7 @@ bun dev
 ````
 
 - [ ] **Step 2: Deploy และตรวจบน production** (ทำร่วมกับผู้ใช้ เพราะต้องใช้บัญชี Vercel ของผู้ใช้)
-  - ล็อกอินได้, สร้างลูกค้าและใบเสนอราคาได้
+  - ล็อกอินได้, สร้างลูกค้าและใบเสนอราคาได้, ตัวจับเวลาเริ่ม/หยุดได้
   - "สร้าง PDF" สำเร็จภายใน 60 วินาที (ครั้งแรกอาจช้าเพราะ cold start) และภาษาไทยถูกต้องเหมือนในเครื่อง
   - ถ้า function error ว่าหา Chromium ไม่เจอ ให้ตรวจ `outputFileTracingIncludes` ใน `next.config.ts` และ version ของ `@sparticuz/chromium`
 
