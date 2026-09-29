@@ -42,7 +42,7 @@
 | Framework | Next.js (App Router), TypeScript |
 | Package manager / test runner | Bun (`bun test`) |
 | Styling | Tailwind CSS |
-| Database | Neon Postgres + Drizzle ORM |
+| Database | Neon Postgres + Drizzle ORM (driver `neon-serverless` แบบ WebSocket เพื่อรองรับ transaction) |
 | Test DB | PGlite (Postgres in-memory ผ่าน Drizzle) |
 | Validation | Zod (schema เดียวใช้ทั้ง client/server) |
 | Auth | รหัสผ่านจาก env var + session cookie เข้ารหัส |
@@ -53,15 +53,15 @@
 ## 4. สถาปัตยกรรม
 
 - Next.js แอปเดียว หน้าเว็บเป็น Server Components การบันทึกข้อมูลผ่าน Server Actions
-- Middleware ตรวจ session cookie ทุกเส้นทาง ยกเว้น `/login` และ `/print/*` (ซึ่งตรวจด้วย print token แทน)
+- `proxy.ts` (Next.js 16 แทน middleware) ตรวจ session cookie ทุกเส้นทาง ยกเว้น `/login` และ `/print/*` (ซึ่งตรวจด้วย print token แทน)
 - Route handler `POST /api/documents/[id]/pdf`:
   1. สร้าง print token (HMAC ของ `documentId` + เวลาหมดอายุ 60 วินาที ด้วย secret จาก env)
   2. เปิด Chromium ไปที่ `/print/[id]?token=...` รอ `document.fonts.ready`
   3. `page.pdf({ format: 'A4', printBackground: true })`
-  4. อัปโหลดขึ้น Vercel Blob (path เดาไม่ได้ เขียนทับไฟล์เดิมของเอกสารนั้น)
-  5. บันทึก `pdf_url` และ `pdf_generated_at` ลง DB
+  4. อัปโหลดขึ้น Vercel Blob แบบ **private** (`documents/{id}/{number}.pdf` เขียนทับไฟล์เดิมของเอกสารนั้น)
+  5. บันทึก `pdf_pathname` และ `pdf_generated_at` ลง DB
   - `maxDuration` = 60 วินาที
-- ดาวน์โหลด PDF ผ่านเส้นทางของแอปที่ต้องล็อกอิน (ตรวจสอบความสามารถ private Blob จากเอกสารล่าสุดตอนเขียน plan; ถ้าไม่มีให้ใช้ public URL ที่มี random suffix และไม่แสดง URL ตรงในหน้าอื่น)
+- ดาวน์โหลด PDF ผ่าน `GET /api/documents/[id]/pdf` (ต้องล็อกอิน) ซึ่งอ่านไฟล์จาก private Blob ด้วย `get()` แล้ว stream กลับ
 
 **แยกหน่วยโค้ด**
 - `lib/money` — คำนวณยอด/ภาษี (pure function, หน่วยสตางค์)
@@ -100,11 +100,11 @@
 - `vat_enabled`, `withholding_enabled`, `withholding_rate_bp`
 - `subtotal`, `vat_amount`, `total`, `withholding_amount`, `net_payable` (สตางค์)
 - `notes`
-- `pdf_url`, `pdf_generated_at`, `updated_at`, `created_at`
+- `pdf_pathname`, `pdf_generated_at`, `updated_at`, `created_at`
 
 **`document_items`**
 - `id`, `document_id` → `documents.id` (cascade delete), `position`
-- `description`, `quantity` (numeric, ทศนิยมได้ 2 ตำแหน่ง), `unit`, `unit_price` (สตางค์), `amount` (สตางค์)
+- `description`, `quantity_hundredths` (integer = จำนวน × 100 รองรับทศนิยม 2 ตำแหน่ง), `unit`, `unit_price` (สตางค์), `amount` (สตางค์)
 
 **`counters`**
 - PK (`type`, `year`), `last_value`
@@ -154,7 +154,7 @@ quotation: draft → sent → accepted ──[แปลง]──→ invoice: un
 
 **การแก้ไขและการลบ**
 - แก้ไขได้จนกว่าเอกสารจะมีเอกสารลูก หลังจากนั้นล็อก
-- ลบได้เฉพาะเอกสารที่ไม่มีเอกสารลูก
+- ลบได้เฉพาะเอกสารที่ไม่มีเอกสารลูก; ลบใบเสร็จแล้วใบแจ้งหนี้แม่กลับเป็น `unpaid`
 - เลขที่จองตอนสร้าง ไม่นำกลับมาใช้แม้เอกสารถูกลบ
 - กติกาทั้งหมดตรวจซ้ำฝั่ง server
 
@@ -179,8 +179,8 @@ quotation: draft → sent → accepted ──[แปลง]──→ invoice: un
 - ฟอร์ม: Zod schema เดียวกันทั้ง client/server แสดง error รายช่อง
 - สร้างเอกสาร: ออกเลขและบันทึกใน transaction เดียว ล้มเหลว = rollback ทั้งหมด
 - แปลงเอกสารซ้ำ / แก้เอกสารที่ถูกล็อก: server ปฏิเสธพร้อมข้อความชัดเจน
-- สร้าง PDF ล้มเหลว (timeout / Chromium / อัปโหลด): แสดง error, เก็บ `pdf_url` เดิม, กดลองใหม่ได้
-- print token หมดอายุหรือไม่ถูกต้อง: `/print/[id]` ตอบ 401
+- สร้าง PDF ล้มเหลว (timeout / Chromium / อัปโหลด): แสดง error, เก็บ `pdf_pathname` เดิม, กดลองใหม่ได้
+- print token หมดอายุหรือไม่ถูกต้อง: `/print/[id]` ตอบ 404 (ไม่เปิดเผยว่ามีเอกสารอยู่)
 - ล็อกอินผิด: แสดงข้อความ ไม่บอกรายละเอียด
 
 ## 11. การทดสอบ (`bun test`)
@@ -200,4 +200,4 @@ quotation: draft → sent → accepted ──[แปลง]──→ invoice: un
 - `APP_PASSWORD` — รหัสผ่านล็อกอิน (เก็บเป็น hash หรือเทียบแบบ constant-time)
 - `SESSION_SECRET` — เข้ารหัส session cookie และลง HMAC print token
 - `CHROME_EXECUTABLE_PATH` — เฉพาะ dev
-- `APP_URL` — base URL ให้ Chromium เรียก `/print/[id]`
+- `APP_URL` — (ไม่บังคับ) base URL ให้ Chromium เรียก `/print/[id]`; ถ้าไม่ตั้งใช้ origin ของ request
