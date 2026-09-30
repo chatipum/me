@@ -55,3 +55,13 @@ export const documentInput = z.object({
   items: z.array(itemInput).min(1, 'ต้องมีอย่างน้อย 1 รายการ'),
 });
 export type DocumentInput = z.infer<typeof documentInput>;
+
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'รูปแบบเวลาไม่ถูกต้อง');
+
+export const timeEntryInput = z.object({
+  date: isoDate,
+  startTime: hhmm,
+  endTime: hhmm,
+  note: trimmed,
+});
+export type TimeEntryInput = z.infer<typeof timeEntryInput>;
