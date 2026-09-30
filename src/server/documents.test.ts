@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { documents } from '@/db/schema';
+import { documentItems, documents } from '@/db/schema';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/db';
 import { sampleInput, seedCustomer } from '@/test/fixtures';
@@ -58,6 +58,18 @@ describe('createQuotation', () => {
     expect((await getDocument(db, id))!.number).toBe('QT-2026-0001');
   });
 
+  test('a failure after the number is allocated rolls the number back', async () => {
+    // int4 overflow makes the insert fail after allocateNumber has run inside the transaction
+    const overflow = sampleInput(customerId, {
+      items: [
+        { description: 'x', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 3_000_000_000 },
+      ],
+    });
+    await expect(createQuotation(db, overflow)).rejects.toThrow();
+    const id = await createQuotation(db, sampleInput(customerId));
+    expect((await getDocument(db, id))!.number).toBe('QT-2026-0001');
+  });
+
   test('editing the customer later does not change the document snapshot', async () => {
     const id = await createQuotation(db, sampleInput(customerId));
     await updateCustomer(db, customerId, {
@@ -106,8 +118,10 @@ describe('updateDocument', () => {
 describe('deleteDocument', () => {
   test('deletes document and items; number is not reused', async () => {
     const id = await createQuotation(db, sampleInput(customerId));
+    expect(await db.select().from(documentItems).where(eq(documentItems.documentId, id))).toHaveLength(2);
     await deleteDocument(db, id);
     expect(await getDocument(db, id)).toBeNull();
+    expect(await db.select().from(documentItems).where(eq(documentItems.documentId, id))).toHaveLength(0);
     const next = await createQuotation(db, sampleInput(customerId));
     expect((await getDocument(db, next))!.number).toBe('QT-2026-0002');
   });
