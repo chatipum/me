@@ -4,6 +4,7 @@ import {
   divRoundHalfUp,
   formatDecimal2,
   formatQuantity,
+  hourlyRateFromSalary,
   hourlyUnitPrice,
   lineAmount,
   parseDecimal2,
@@ -39,6 +40,36 @@ describe('hourly pricing', () => {
   test('priceItem uses hours when > 0, otherwise keeps the entered price', () => {
     expect(priceItem({ hoursHundredths: 1000, unitPriceSatang: 1 }, 50000).unitPriceSatang).toBe(500000);
     expect(priceItem({ hoursHundredths: 0, unitPriceSatang: 120000 }, 50000).unitPriceSatang).toBe(120000);
+  });
+});
+
+describe('hourlyRateFromSalary', () => {
+  test('60,000 × 1.5 ÷ (22 × 8) = 511.36', () => {
+    expect(hourlyRateFromSalary(6_000_000, 22, 800, 150)).toBe(51136);
+  });
+  test('markup 1.0 rounds 340.909… to 340.91', () => {
+    expect(hourlyRateFromSalary(6_000_000, 22, 800, 100)).toBe(34091);
+  });
+  test('exact half rounds up', () => {
+    // 0.03 × 1.0 ÷ (1 × 2h) = 0.015 → 0.02
+    expect(hourlyRateFromSalary(3, 1, 200, 100)).toBe(2);
+  });
+  test('fractional hours per day', () => {
+    // 60,000 × 1.5 ÷ (22 × 7.5) = 545.4545… → 545.45
+    expect(hourlyRateFromSalary(6_000_000, 22, 750, 150)).toBe(54545);
+  });
+  test('zero salary gives zero', () => {
+    expect(hourlyRateFromSalary(0, 22, 800, 150)).toBe(0);
+  });
+  test('zero days or zero hours returns null', () => {
+    expect(hourlyRateFromSalary(6_000_000, 0, 800, 150)).toBeNull();
+    expect(hourlyRateFromSalary(6_000_000, 22, 0, 150)).toBeNull();
+  });
+  test('negative or non-integer input returns null', () => {
+    expect(hourlyRateFromSalary(-1, 22, 800, 150)).toBeNull();
+    expect(hourlyRateFromSalary(6_000_000, 22, 800, -150)).toBeNull();
+    expect(hourlyRateFromSalary(6_000_000, 22.5, 800, 150)).toBeNull();
+    expect(hourlyRateFromSalary(Number.NaN, 22, 800, 150)).toBeNull();
   });
 });
 

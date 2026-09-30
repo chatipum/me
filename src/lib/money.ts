@@ -13,6 +13,20 @@ export function hourlyUnitPrice(hoursHundredths: number, hourlyRateSatang: numbe
   return divRoundHalfUp(hoursHundredths * hourlyRateSatang, 100);
 }
 
+// salary(satang) × markup(hundredths) ÷ (days × hoursPerDay(hundredths)); the ×100 scalings cancel.
+export function hourlyRateFromSalary(
+  salarySatang: number,
+  workDays: number,
+  hoursPerDayHundredths: number,
+  markupHundredths: number,
+): number | null {
+  const valid = [salarySatang, workDays, hoursPerDayHundredths, markupHundredths].every(
+    (n) => Number.isSafeInteger(n) && n >= 0,
+  );
+  if (!valid || workDays <= 0 || hoursPerDayHundredths <= 0) return null;
+  return divRoundHalfUp(salarySatang * markupHundredths, workDays * hoursPerDayHundredths);
+}
+
 export function priceItem<T extends { hoursHundredths: number; unitPriceSatang: number }>(
   item: T,
   hourlyRateSatang: number,
