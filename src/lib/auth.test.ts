@@ -3,6 +3,7 @@ import {
   checkPassword,
   createPrintToken,
   createSessionToken,
+  isValidSession,
   PRINT_TTL_MS,
   SESSION_TTL_MS,
   safeEqual,
@@ -61,4 +62,31 @@ test('safeEqual', () => {
   expect(safeEqual('abc', 'abc')).toBe(true);
   expect(safeEqual('abc', 'abd')).toBe(false);
   expect(safeEqual('abc', 'abcd')).toBe(false);
+});
+
+describe('isValidSession', () => {
+  test('accepts a valid token', async () => {
+    const token = await createSessionToken(SECRET, NOW);
+    expect(await isValidSession(SECRET, token, NOW)).toBe(true);
+  });
+
+  test('rejects missing secret or token', async () => {
+    const token = await createSessionToken(SECRET, NOW);
+    expect(await isValidSession(undefined, token, NOW)).toBe(false);
+    expect(await isValidSession('', token, NOW)).toBe(false);
+    expect(await isValidSession(SECRET, undefined, NOW)).toBe(false);
+    expect(await isValidSession(SECRET, '', NOW)).toBe(false);
+  });
+
+  test('rejects bad, tampered or wrong-secret tokens', async () => {
+    const token = await createSessionToken(SECRET, NOW);
+    expect(await isValidSession(SECRET, 'garbage', NOW)).toBe(false);
+    expect(await isValidSession(SECRET, `${token}0`, NOW)).toBe(false);
+    expect(await isValidSession('other-secret', token, NOW)).toBe(false);
+  });
+
+  test('rejects expired token', async () => {
+    const token = await createSessionToken(SECRET, NOW);
+    expect(await isValidSession(SECRET, token, NOW + SESSION_TTL_MS + 1)).toBe(false);
+  });
 });

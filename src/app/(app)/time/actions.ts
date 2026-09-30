@@ -3,11 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { getDb } from '@/db/client';
 import { type TimeEntryInput, timeEntryInput } from '@/lib/schemas';
-import { type ActionResult, runAction } from '@/server/action-result';
+import type { ActionResult } from '@/server/action-result';
+import { runAuthedAction } from '@/server/session';
 import { createTimeEntry, deleteTimeEntry, startTimer, stopTimer, updateTimeEntry } from '@/server/time';
 
 async function run(fn: () => Promise<void>): Promise<ActionResult<void>> {
-  const result = await runAction(fn);
+  const result = await runAuthedAction(fn);
   if (result.ok) revalidatePath('/', 'layout');
   return result;
 }

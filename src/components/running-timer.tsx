@@ -8,6 +8,7 @@ import { formatElapsed } from '@/lib/time';
 export function RunningTimer({ jobId, jobNumber, startedAt }: { jobId: number; jobNumber: string; startedAt: string }) {
   const [now, setNow] = useState(() => Date.now());
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -28,13 +29,16 @@ export function RunningTimer({ jobId, jobNumber, startedAt }: { jobId: number; j
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            await stopTimerAction();
+            setError(null);
+            const result = await stopTimerAction();
+            if (!result.ok) setError(result.error);
           })
         }
         className="rounded bg-red-600 px-2 text-white disabled:opacity-50"
       >
         หยุด
       </button>
+      {error && <span className="text-red-600">{error}</span>}
     </div>
   );
 }

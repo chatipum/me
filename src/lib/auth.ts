@@ -47,6 +47,14 @@ export function verifySessionToken(secret: string, token: string, now = Date.now
   return checkToken(secret, 'session', token, now);
 }
 
+export async function isValidSession(
+  secret: string | undefined,
+  token: string | undefined,
+  now = Date.now(),
+): Promise<boolean> {
+  return Boolean(secret && token && (await verifySessionToken(secret, token, now)));
+}
+
 export function createPrintToken(secret: string, docId: number, now = Date.now()): Promise<string> {
   return makeToken(secret, `print:${docId}`, PRINT_TTL_MS, now);
 }

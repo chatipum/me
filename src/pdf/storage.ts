@@ -10,10 +10,11 @@ export async function uploadPdf(pathname: string, bytes: Uint8Array): Promise<vo
     contentType: 'application/pdf',
     addRandomSuffix: false,
     allowOverwrite: true,
+    cacheControlMaxAge: 60,
   });
 }
 
 export async function readPdf(pathname: string): Promise<ReadableStream<Uint8Array> | null> {
-  const result = await get(pathname, { access: 'private' });
+  const result = await get(pathname, { access: 'private', useCache: false });
   return result?.stream ?? null;
 }

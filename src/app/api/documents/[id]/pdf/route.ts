@@ -4,6 +4,7 @@ import { requireEnv } from '@/lib/env';
 import { renderPdf } from '@/pdf/render';
 import { pdfPathname, readPdf, uploadPdf } from '@/pdf/storage';
 import { getDocument, markPdfGenerated } from '@/server/documents';
+import { hasSession } from '@/server/session';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -15,7 +16,10 @@ async function loadDocument(context: Context) {
   return Number.isInteger(id) ? getDocument(getDb(), id) : null;
 }
 
+const unauthorized = () => Response.json({ error: 'unauthorized' }, { status: 401 });
+
 export async function POST(request: Request, context: Context) {
+  if (!(await hasSession())) return unauthorized();
   const doc = await loadDocument(context);
   if (!doc) return Response.json({ error: 'ไม่พบเอกสาร' }, { status: 404 });
   try {
@@ -33,6 +37,7 @@ export async function POST(request: Request, context: Context) {
 }
 
 export async function GET(_request: Request, context: Context) {
+  if (!(await hasSession())) return unauthorized();
   const doc = await loadDocument(context);
   if (!doc?.pdfPathname) return Response.json({ error: 'ยังไม่มี PDF' }, { status: 404 });
   const stream = await readPdf(doc.pdfPathname);
