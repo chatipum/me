@@ -63,7 +63,7 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
             <th className="w-10 py-2">ลำดับ</th>
             <th className="py-2">รายละเอียด</th>
             <th className="w-20 py-2 text-right">จำนวน</th>
-            <th className="w-16 py-2 pl-2">หน่วย</th>
+            <th className="w-16 py-2 pl-2 text-right">หน่วย</th>
             <th className="w-28 py-2 text-right">ราคาต่อหน่วย</th>
             <th className="w-28 py-2 text-right">จำนวนเงิน</th>
           </tr>
@@ -77,7 +77,7 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
                 {item.hoursHundredths > 0 && ` (${formatQuantity(item.hoursHundredths)} ชั่วโมง)`}
               </td>
               <td className="py-2 text-right tabular-nums">{formatQuantity(item.quantityHundredths)}</td>
-              <td className="py-2 pl-2">{item.unit}</td>
+              <td className="py-2 pl-2 text-right">{item.unit}</td>
               <td className="py-2 text-right tabular-nums">{formatDecimal2(item.unitPriceSatang)}</td>
               <td className="py-2 text-right tabular-nums">{formatDecimal2(item.amount)}</td>
             </tr>
