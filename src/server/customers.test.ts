@@ -44,4 +44,10 @@ describe('settings', () => {
     expect(updated.businessName).toBe('สตูดิโอของฉัน');
     expect(updated.defaultQuoteValidityDays).toBe(15);
   });
+  test('signature defaults to empty and can be stored', async () => {
+    const s = await getSettings(db);
+    expect(s.signatureDataUrl).toBe('');
+    await updateSettings(db, { ...s, signatureDataUrl: 'data:image/png;base64,AAAA' });
+    expect((await getSettings(db)).signatureDataUrl).toBe('data:image/png;base64,AAAA');
+  });
 });

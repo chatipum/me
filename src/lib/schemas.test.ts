@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { customerInput, documentInput } from './schemas';
+import { customerInput, documentInput, settingsInput } from './schemas';
 
 const validCustomer = {
   name: ' บริษัท เอ ',
@@ -68,5 +68,38 @@ describe('documentInput', () => {
     expect(documentInput.safeParse({ ...base, items: [{ ...base.items[0], hoursHundredths: -1 }] }).success).toBe(
       false,
     );
+  });
+});
+
+describe('settingsInput signature', () => {
+  const base = {
+    businessName: 'สตูดิโอ',
+    address: '',
+    taxId: '',
+    phone: '',
+    email: '',
+    bankName: '',
+    bankAccountName: '',
+    bankAccountNumber: '',
+    defaultWithholdingRateBp: 300,
+    defaultQuoteValidityDays: 30,
+    defaultInvoiceDueDays: 30,
+    defaultNotes: '',
+    hourlyRateSatang: 0,
+  };
+  const png = 'data:image/png;base64,';
+  test('empty signature is allowed', () => {
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: '' }).success).toBe(true);
+  });
+  test('png data URL is allowed up to the length limit', () => {
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: `${png}iVBORw0KGgo=` }).success).toBe(true);
+    const atLimit = png + 'A'.repeat(280_000 - png.length);
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: atLimit }).success).toBe(true);
+  });
+  test('rejects other image types, plain text and over-length values', () => {
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: 'data:image/jpeg;base64,/9j/' }).success).toBe(false);
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: 'hello' }).success).toBe(false);
+    const tooLong = png + 'A'.repeat(280_001 - png.length);
+    expect(settingsInput.safeParse({ ...base, signatureDataUrl: tooLong }).success).toBe(false);
   });
 });

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { buttonClass, Field, inputClass } from '@/components/field';
+import { buttonClass, Field, inputClass, secondaryButtonClass } from '@/components/field';
 import type { Settings } from '@/db/schema';
 import { hourlyRateFromSalary, parseDecimal2, toInputString } from '@/lib/money';
+import { SIGNATURE_MAX_BYTES } from '@/lib/signature';
 import { updateSettingsAction } from './actions';
 
 type TextKey =
@@ -54,6 +55,31 @@ export function SettingsForm({ initial }: { initial: Settings }) {
     }
     const result = hourlyRateFromSalary(salarySatang, Number(daysText), hoursHundredths, markupHundredths);
     if (result !== null) setHourlyRate(toInputString(result));
+  }
+
+  function pickSignature(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow picking the same file again
+    if (!file) return;
+    const problem =
+      file.type !== 'image/png'
+        ? 'ลายเซ็นต้องเป็นไฟล์ PNG'
+        : file.size > SIGNATURE_MAX_BYTES
+          ? 'ไฟล์ลายเซ็นต้องไม่เกิน 200KB'
+          : null;
+    if (problem) {
+      setErrors({ ...errors, signatureDataUrl: problem });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl !== 'string') return;
+      setValues((current) => ({ ...current, signatureDataUrl: dataUrl }));
+      setErrors(({ signatureDataUrl: _removed, ...rest }) => rest);
+    };
+    reader.onerror = () => setErrors((current) => ({ ...current, signatureDataUrl: 'อ่านไฟล์ไม่สำเร็จ' }));
+    reader.readAsDataURL(file);
   }
 
   function submit(event: React.FormEvent) {
@@ -175,6 +201,29 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             onChange={(e) => setValues({ ...values, defaultInvoiceDueDays: Number(e.target.value) })}
           />
         </Field>
+      </div>
+      <div className="space-y-2">
+        <Field label="ลายเซ็น (PNG ไม่เกิน 200KB)" error={errors.signatureDataUrl}>
+          <input type="file" accept="image/png" className={inputClass} onChange={pickSignature} />
+        </Field>
+        {values.signatureDataUrl && (
+          <div className="flex items-end gap-3">
+            {/* biome-ignore lint/performance/noImgElement: preview of a local data URL; next/image adds nothing */}
+            <img
+              src={values.signatureDataUrl}
+              alt="ลายเซ็นปัจจุบัน"
+              className="h-16 rounded border border-slate-200 object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => setValues({ ...values, signatureDataUrl: '' })}
+              className={secondaryButtonClass}
+            >
+              ลบลายเซ็น
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-slate-500">ลายเซ็นจะแสดงในช่องผู้ออกเอกสาร/ผู้รับเงินของ PDF หลังกดบันทึก</p>
       </div>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={buttonClass}>

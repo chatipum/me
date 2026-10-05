@@ -120,14 +120,20 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
             <div className="whitespace-pre-line">{doc.notes}</div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-16 pt-12 text-center">
+        <div className="grid grid-cols-2 items-end gap-16 pt-12 text-center">
           <div>
             <div className="border-t border-slate-400 pt-1">{doc.type === 'receipt' ? 'ผู้จ่ายเงิน' : 'ผู้อนุมัติ / ลูกค้า'}</div>
             <div className="text-slate-500">วันที่ ____/____/______</div>
           </div>
           <div>
+            {settings.signatureDataUrl && (
+              // biome-ignore lint/performance/noImgElement: data URL rendered by Chromium for the PDF; next/image adds nothing
+              <img src={settings.signatureDataUrl} alt="ลายเซ็น" className="mx-auto h-16 object-contain" />
+            )}
             <div className="border-t border-slate-400 pt-1">{doc.type === 'receipt' ? 'ผู้รับเงิน' : 'ผู้ออกเอกสาร'}</div>
-            <div className="text-slate-500">วันที่ ____/____/______</div>
+            <div className="text-slate-500">
+              {settings.signatureDataUrl ? `วันที่ ${formatThaiDate(doc.issueDate)}` : 'วันที่ ____/____/______'}
+            </div>
           </div>
         </div>
       </footer>

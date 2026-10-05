@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PAYMENT_METHODS } from './doc-status';
+import { SIGNATURE_MAX_CHARS, SIGNATURE_PREFIX } from './signature';
 
 const trimmed = z.string().trim();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'รูปแบบวันที่ไม่ถูกต้อง');
@@ -30,6 +31,10 @@ export const settingsInput = z.object({
   defaultInvoiceDueDays: z.number().int().min(0).max(365),
   defaultNotes: z.string(),
   hourlyRateSatang: z.number().int().min(0),
+  signatureDataUrl: z.union([
+    z.literal(''),
+    z.string().startsWith(SIGNATURE_PREFIX, 'ลายเซ็นต้องเป็นไฟล์ PNG').max(SIGNATURE_MAX_CHARS, 'ไฟล์ลายเซ็นต้องไม่เกิน 200KB'),
+  ]),
 });
 export type SettingsInput = z.infer<typeof settingsInput>;
 
