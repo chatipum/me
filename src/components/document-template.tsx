@@ -123,7 +123,9 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
         <div className="grid grid-cols-2 items-end gap-16 pt-12 text-center">
           <div>
             <div className="border-t border-slate-400 pt-1">{doc.type === 'receipt' ? 'ผู้จ่ายเงิน' : 'ผู้อนุมัติ / ลูกค้า'}</div>
-            <div className="text-slate-500">วันที่ ____________</div>
+            <div className="text-slate-500">
+              วันที่ <span className="inline-block w-1/2 border-b border-slate-400" />
+            </div>
           </div>
           <div>
             {settings.signatureDataUrl && (
