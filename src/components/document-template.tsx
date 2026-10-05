@@ -134,7 +134,12 @@ export function DocumentTemplate({ doc, settings }: { doc: DocumentWithItems; se
             )}
             <div className="border-t border-slate-400 pt-1">{doc.type === 'receipt' ? 'ผู้รับเงิน' : 'ผู้ออกเอกสาร'}</div>
             <div className="text-slate-500">
-              {settings.signatureDataUrl ? `วันที่ ${formatThaiDate(doc.issueDate)}` : 'วันที่ ____/____/______'}
+              วันที่{' '}
+              {settings.signatureDataUrl ? (
+                formatThaiDate(doc.issueDate)
+              ) : (
+                <span className="inline-block w-1/2 border-b border-slate-400" />
+              )}
             </div>
           </div>
         </div>
