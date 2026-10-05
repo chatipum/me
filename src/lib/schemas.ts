@@ -39,6 +39,7 @@ export const itemInput = z.object({
   quantityHundredths: z.number().int().positive('จำนวนต้องมากกว่า 0'),
   unit: trimmed,
   unitPriceSatang: z.number().int().min(0, 'ราคาต้องไม่ติดลบ'),
+  withholding: z.boolean(),
 });
 
 export const documentInput = z.object({

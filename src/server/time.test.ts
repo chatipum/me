@@ -36,8 +36,22 @@ function hourlyQuotation(issueDate = '2026-09-29') {
     sampleInput(customerId, {
       issueDate,
       items: [
-        { description: 'ทำเว็บขายของ', hoursHundredths: 1000, quantityHundredths: 100, unit: '', unitPriceSatang: 0 },
-        { description: 'ค่าโดเมน', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 50000 },
+        {
+          description: 'ทำเว็บขายของ',
+          hoursHundredths: 1000,
+          quantityHundredths: 100,
+          unit: '',
+          unitPriceSatang: 0,
+          withholding: true,
+        },
+        {
+          description: 'ค่าโดเมน',
+          hoursHundredths: 0,
+          quantityHundredths: 100,
+          unit: '',
+          unitPriceSatang: 50000,
+          withholding: true,
+        },
       ],
     }),
   );

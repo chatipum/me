@@ -45,6 +45,8 @@ export const settings = pgTable('settings', {
   defaultInvoiceDueDays: integer('default_invoice_due_days').notNull().default(30),
   defaultNotes: text('default_notes').notNull().default(''),
   hourlyRateSatang: integer('hourly_rate_satang').notNull().default(0),
+  // PNG data URL ('' = none), drawn on the issuer signature line of PDFs
+  signatureDataUrl: text('signature_data_url').notNull().default(''),
 });
 
 export const customers = pgTable('customers', {
@@ -106,6 +108,8 @@ export const documentItems = pgTable('document_items', {
   unit: text('unit').notNull().default(''),
   unitPriceSatang: integer('unit_price_satang').notNull(),
   amount: integer('amount').notNull(),
+  // included in the withholding-tax base when the document has withholding enabled
+  withholding: boolean('withholding').notNull().default(true),
 });
 
 export const counters = pgTable(

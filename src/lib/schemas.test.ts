@@ -39,7 +39,16 @@ describe('documentInput', () => {
     withholdingEnabled: false,
     withholdingRateBp: 300,
     notes: '',
-    items: [{ description: 'งาน', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 1000 }],
+    items: [
+      {
+        description: 'งาน',
+        hoursHundredths: 0,
+        quantityHundredths: 100,
+        unit: '',
+        unitPriceSatang: 1000,
+        withholding: true,
+      },
+    ],
   };
   test('valid', () => {
     expect(documentInput.safeParse(base).success).toBe(true);

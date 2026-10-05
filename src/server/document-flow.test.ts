@@ -58,6 +58,25 @@ describe('convertToInvoice', () => {
     expect((await getDocument(db, qt))!.childId).toBe(inv);
   });
 
+  test('keeps per-item withholding flags through invoice and receipt', async () => {
+    const input = sampleInput(customerId);
+    const qt = await createQuotation(db, {
+      ...input,
+      items: [input.items[0], { ...input.items[1], withholding: false }],
+    });
+    await setQuotationStatus(db, qt, 'sent');
+    await setQuotationStatus(db, qt, 'accepted');
+    const inv = await convertToInvoice(db, qt, TODAY);
+    const rc = await convertToReceipt(db, inv, { paidDate: TODAY, paymentMethod: 'cash' }, TODAY);
+    const copy = await duplicateAsQuotation(db, qt, TODAY);
+    for (const id of [inv, rc, copy]) {
+      const doc = await getDocument(db, id);
+      expect(doc?.items.map((i) => i.withholding)).toEqual([true, false]);
+      expect(doc?.withholdingAmount).toBe(30000);
+      expect(doc?.netPayable).toBe(1200500);
+    }
+  });
+
   test('requires accepted quotation', async () => {
     const qt = await createQuotation(db, sampleInput(customerId));
     await expect(convertToInvoice(db, qt, TODAY)).rejects.toThrow('แปลงเอกสารนี้ไม่ได้');
@@ -129,7 +148,16 @@ describe('duplicateAsQuotation', () => {
     const qt = await createQuotation(
       db,
       sampleInput(customerId, {
-        items: [{ description: 'ทำเว็บ', hoursHundredths: 1000, quantityHundredths: 100, unit: '', unitPriceSatang: 0 }],
+        items: [
+          {
+            description: 'ทำเว็บ',
+            hoursHundredths: 1000,
+            quantityHundredths: 100,
+            unit: '',
+            unitPriceSatang: 0,
+            withholding: true,
+          },
+        ],
       }),
     );
     await setQuotationStatus(db, qt, 'sent');

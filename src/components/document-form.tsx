@@ -16,7 +16,15 @@ import type { ActionResult } from '@/server/action-result';
 import { CustomerForm, EMPTY_CUSTOMER } from './customer-form';
 import { buttonClass, Field, inputClass, secondaryButtonClass } from './field';
 
-type ItemRow = { key: number; description: string; hours: string; quantity: string; unit: string; unitPrice: string };
+type ItemRow = {
+  key: number;
+  description: string;
+  hours: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  withholding: boolean;
+};
 
 export type DocumentFormValues = {
   customerId: number | null;
@@ -40,6 +48,7 @@ const emptyItem = (): ItemRow => ({
   quantity: '1',
   unit: '',
   unitPrice: '',
+  withholding: true,
 });
 
 export function DocumentForm({
@@ -72,6 +81,7 @@ export function DocumentForm({
     return {
       description: row.description,
       unit: row.unit,
+      withholding: row.withholding,
       hoursHundredths,
       quantityHundredths: parseDecimal2(row.quantity),
       // Hourly items show the computed price; the server recomputes it the same way.
@@ -90,6 +100,7 @@ export function DocumentForm({
     items: parsedItems.map((i) => ({
       quantityHundredths: i.quantityHundredths ?? 0,
       unitPriceSatang: i.unitPriceSatang ?? 0,
+      withholding: i.withholding,
     })),
     vatEnabled: values.vatEnabled,
     withholdingEnabled: values.withholdingEnabled,
@@ -138,6 +149,7 @@ export function DocumentForm({
         hoursHundredths: i.hoursHundredths ?? 0,
         quantityHundredths: i.quantityHundredths ?? 0,
         unitPriceSatang: i.unitPriceSatang ?? 0,
+        withholding: i.withholding,
       })),
     };
     startTransition(async () => {
@@ -336,6 +348,17 @@ export function DocumentForm({
                 ✕
               </button>
             </div>
+            {values.withholdingEnabled && (
+              <label className="flex items-center gap-2 text-sm sm:col-span-12">
+                <input
+                  type="checkbox"
+                  aria-label={`หัก ณ ที่จ่าย รายการที่ ${index + 1}`}
+                  checked={row.withholding}
+                  onChange={(e) => updateItem(row.key, { withholding: e.target.checked })}
+                />
+                หัก ณ ที่จ่าย
+              </label>
+            )}
           </div>
         ))}
         <button type="button" onClick={() => setItems([...items, emptyItem()])} className={secondaryButtonClass}>

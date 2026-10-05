@@ -75,8 +75,8 @@ describe('hourlyRateFromSalary', () => {
 
 describe('computeTotals', () => {
   const items = [
-    { quantityHundredths: 100, unitPriceSatang: 1000000 }, // 10,000.00
-    { quantityHundredths: 300, unitPriceSatang: 50000 }, // 1,500.00
+    { quantityHundredths: 100, unitPriceSatang: 1000000, withholding: true }, // 10,000.00
+    { quantityHundredths: 300, unitPriceSatang: 50000, withholding: true }, // 1,500.00
   ];
 
   test('no tax', () => {
@@ -118,7 +118,7 @@ describe('computeTotals', () => {
   test('VAT rounds half up', () => {
     // 0.07 × 1.50 = 0.105 → 0.11
     const r = computeTotals({
-      items: [{ quantityHundredths: 100, unitPriceSatang: 150 }],
+      items: [{ quantityHundredths: 100, unitPriceSatang: 150, withholding: true }],
       vatEnabled: true,
       withholdingEnabled: false,
       withholdingRateBp: 0,
@@ -128,7 +128,7 @@ describe('computeTotals', () => {
 
   test('large amounts stay exact', () => {
     const r = computeTotals({
-      items: [{ quantityHundredths: 100, unitPriceSatang: 99_999_999_999 }], // 999,999,999.99
+      items: [{ quantityHundredths: 100, unitPriceSatang: 99_999_999_999, withholding: true }], // 999,999,999.99
       vatEnabled: true,
       withholdingEnabled: true,
       withholdingRateBp: 300,
@@ -137,6 +137,34 @@ describe('computeTotals', () => {
     expect(r.vatAmount).toBe(7_000_000_000); // 6,999,999,999.93 → rounds half up
     expect(r.withholdingAmount).toBe(3_000_000_000); // 2,999,999,999.97 → rounds half up
     expect(r.netPayable).toBe(99_999_999_999 + 7_000_000_000 - 3_000_000_000);
+  });
+
+  test('withholding base is only the ticked items; VAT stays on the full subtotal', () => {
+    const mixed = [items[0], { ...items[1], withholding: false }];
+    expect(computeTotals({ items: mixed, vatEnabled: true, withholdingEnabled: true, withholdingRateBp: 300 })).toEqual(
+      {
+        subtotal: 1150000,
+        vatAmount: 80500,
+        total: 1230500,
+        withholdingAmount: 30000, // 3% of 10,000.00 only
+        netPayable: 1200500,
+      },
+    );
+  });
+
+  test('no ticked items gives zero withholding', () => {
+    const none = items.map((item) => ({ ...item, withholding: false }));
+    const r = computeTotals({ items: none, vatEnabled: true, withholdingEnabled: true, withholdingRateBp: 300 });
+    expect(r.withholdingAmount).toBe(0);
+    expect(r.vatAmount).toBe(80500);
+    expect(r.netPayable).toBe(r.total);
+  });
+
+  test('unticked items do not matter when withholding is off', () => {
+    const none = items.map((item) => ({ ...item, withholding: false }));
+    expect(computeTotals({ items: none, vatEnabled: true, withholdingEnabled: false, withholdingRateBp: 300 })).toEqual(
+      computeTotals({ items, vatEnabled: true, withholdingEnabled: false, withholdingRateBp: 300 }),
+    );
   });
 });
 

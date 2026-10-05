@@ -40,7 +40,7 @@ function applyRateBp(amount: number, rateBp: number): number {
 }
 
 export type TotalsInput = {
-  items: { quantityHundredths: number; unitPriceSatang: number }[];
+  items: { quantityHundredths: number; unitPriceSatang: number; withholding: boolean }[];
   vatEnabled: boolean;
   withholdingEnabled: boolean;
   withholdingRateBp: number;
@@ -55,13 +55,17 @@ export type Totals = {
 };
 
 export function computeTotals(input: TotalsInput): Totals {
-  const subtotal = input.items.reduce(
-    (sum, item) => sum + lineAmount(item.quantityHundredths, item.unitPriceSatang),
-    0,
-  );
+  let subtotal = 0;
+  let withholdingBase = 0;
+  for (const item of input.items) {
+    const amount = lineAmount(item.quantityHundredths, item.unitPriceSatang);
+    subtotal += amount;
+    if (item.withholding) withholdingBase += amount;
+  }
   const vatAmount = input.vatEnabled ? applyRateBp(subtotal, VAT_RATE_BP) : 0;
   const total = subtotal + vatAmount;
-  const withholdingAmount = input.withholdingEnabled ? applyRateBp(subtotal, input.withholdingRateBp) : 0;
+  // Withholding applies to the pre-VAT amount of ticked items only.
+  const withholdingAmount = input.withholdingEnabled ? applyRateBp(withholdingBase, input.withholdingRateBp) : 0;
   return { subtotal, vatAmount, total, withholdingAmount, netPayable: total - withholdingAmount };
 }
 

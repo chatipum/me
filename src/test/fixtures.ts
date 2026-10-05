@@ -36,6 +36,7 @@ export function sampleInput(customerId: number, overrides: Partial<DocumentInput
         quantityHundredths: 100,
         unit: 'งาน',
         unitPriceSatang: 1000000,
+        withholding: true,
       },
       {
         description: 'ดูแลระบบรายเดือน',
@@ -43,6 +44,7 @@ export function sampleInput(customerId: number, overrides: Partial<DocumentInput
         quantityHundredths: 300,
         unit: 'เดือน',
         unitPriceSatang: 50000,
+        withholding: true,
       },
     ],
     ...overrides,

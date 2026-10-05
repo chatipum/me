@@ -41,6 +41,7 @@ export default async function EditDocumentPage({ params }: { params: Promise<{ i
             quantity: toInputString(item.quantityHundredths),
             unit: item.unit,
             unitPrice: toInputString(item.unitPriceSatang),
+            withholding: item.withholding,
           })),
         }}
       />

@@ -87,6 +87,7 @@ async function insertItems(db: Db, documentId: number, input: DocumentInput, hou
       unit: item.unit,
       unitPriceSatang: item.unitPriceSatang,
       amount: lineAmount(item.quantityHundredths, item.unitPriceSatang),
+      withholding: item.withholding,
     })),
   );
 }

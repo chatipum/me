@@ -26,6 +26,7 @@ function inputFrom(doc: DocumentWithItems, overrides: Partial<DocumentInput>): D
       quantityHundredths: item.quantityHundredths,
       unit: item.unit,
       unitPriceSatang: item.unitPriceSatang,
+      withholding: item.withholding,
     })),
     ...overrides,
   };

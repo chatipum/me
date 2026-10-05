@@ -52,6 +52,19 @@ describe('createQuotation', () => {
     expect(doc!.parentNumber).toBeNull();
   });
 
+  test('stores the per-item withholding flag; only ticked items are withheld', async () => {
+    const input = sampleInput(customerId);
+    const id = await createQuotation(db, {
+      ...input,
+      items: [input.items[0], { ...input.items[1], withholding: false }],
+    });
+    const doc = await getDocument(db, id);
+    expect(doc?.items.map((i) => i.withholding)).toEqual([true, false]);
+    expect(doc?.vatAmount).toBe(80500);
+    expect(doc?.withholdingAmount).toBe(30000);
+    expect(doc?.netPayable).toBe(1200500);
+  });
+
   test('unknown customer is rejected and does not consume a number', async () => {
     await expect(createQuotation(db, sampleInput(999))).rejects.toThrow('ไม่พบลูกค้า');
     const id = await createQuotation(db, sampleInput(customerId));
@@ -62,7 +75,14 @@ describe('createQuotation', () => {
     // int4 overflow makes the insert fail after allocateNumber has run inside the transaction
     const overflow = sampleInput(customerId, {
       items: [
-        { description: 'x', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 3_000_000_000 },
+        {
+          description: 'x',
+          hoursHundredths: 0,
+          quantityHundredths: 100,
+          unit: '',
+          unitPriceSatang: 3_000_000_000,
+          withholding: true,
+        },
       ],
     });
     await expect(createQuotation(db, overflow)).rejects.toThrow();
@@ -99,7 +119,14 @@ describe('updateDocument', () => {
         vatEnabled: false,
         withholdingEnabled: false,
         items: [
-          { description: 'งานเดียว', hoursHundredths: 0, quantityHundredths: 100, unit: '', unitPriceSatang: 500000 },
+          {
+            description: 'งานเดียว',
+            hoursHundredths: 0,
+            quantityHundredths: 100,
+            unit: '',
+            unitPriceSatang: 500000,
+            withholding: true,
+          },
         ],
       }),
     );
@@ -157,8 +184,16 @@ describe('hourly items', () => {
           quantityHundredths: 100,
           unit: 'งาน',
           unitPriceSatang: 0,
+          withholding: true,
         },
-        { description: 'ค่าโดเมน', hoursHundredths: 0, quantityHundredths: 100, unit: 'ปี', unitPriceSatang: 50000 },
+        {
+          description: 'ค่าโดเมน',
+          hoursHundredths: 0,
+          quantityHundredths: 100,
+          unit: 'ปี',
+          unitPriceSatang: 50000,
+          withholding: true,
+        },
       ],
     });
 
